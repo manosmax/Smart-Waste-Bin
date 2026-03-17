@@ -102,7 +102,7 @@ python pir_event_logger.py --device-id pir-01 --pin 18
 ```bash
 python pir_event_logger.py \
   --device-id      pir-01              \
-  --pin            18                  \
+  --pin            17                  \
   --sample-interval 0.1               \
   --cooldown       5                   \
   --min-high       0.2                 \
