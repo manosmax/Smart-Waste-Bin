@@ -116,7 +116,7 @@ python pir_event_logger.py \
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--device-id` | str | *(required)* | Identifier embedded in every record |
-| `--pin` | int | `18` | BCM GPIO pin number |
+| `--pin` | int | `17` | BCM GPIO pin number |
 | `--sample-interval` | float | `0.1` | Seconds between sensor reads |
 | `--cooldown` | float | `5.0` | Min seconds between emitted events |
 | `--min-high` | float | `0.0` | Min seconds signal must stay HIGH to count |
