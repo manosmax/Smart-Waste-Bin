@@ -23,7 +23,7 @@
 Smart-Waste-Bin-Project/
 ├── README.md
 ├── requirements.txt
-└── src/
+├── src/
     └── pirlib/
         ├── __init__.py
         ├── sampler.py
