@@ -155,7 +155,7 @@ Events are written one JSON object per line (JSONL / ndjson), appended to
   "event_time":        "2026-03-06T11:51:23.060Z",
   "ingest_time":       "2026-03-06T11:51:23.061Z",
   "latency_ms":        0.12,
-  "pin":               18,
+  "pin":               17,
   "sample_interval_s": 0.1,
   "cooldown_s":        5.0,
   "min_high_s":        0.2
