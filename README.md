@@ -16,6 +16,19 @@
 
 ---
 
+## Structure
+
+```
+Smart Waste Bin Project/
+├── README.md       # Readme: Instructions for project reproduction and information.
+├── requirements.txt
+└── src/
+    └── pirlib/ 
+      ├── __init__.py
+      ├── sampler.py        # GPIO read abstraction (stubs on non-Pi)
+      └── interpreter.py   # Raw bool → motion events (cooldown + min-high)
+```
+
 *Made with ❤️ by Team 8 · ECE Upatras*
 
 </div>
