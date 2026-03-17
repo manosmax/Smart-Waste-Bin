@@ -37,14 +37,14 @@
 Smart-Waste-Bin-Project/
 ├── README.md                    # Project documentation
 ├── requirements.txt             # Python dependencies
-├── setup.py                     # Package configuration
 ├── .gitignore                   # Git ignore rules
 └── src/
+    ├── run_pipeline.py 
     └── pirlib/
         ├── __init__.py
         ├── sampler.py           # GPIO abstraction layer
         ├── interpreter.py       # Motion event detector
-        └── config.py            # Configuration constants
+
 ```
 
 
