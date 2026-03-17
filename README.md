@@ -18,8 +18,6 @@
 
 
 
-
-
 *Made with ❤️ by Team 8 · ECE Upatras*
 
 </div>
