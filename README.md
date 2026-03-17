@@ -16,18 +16,9 @@
 
 ---
 
-## Structure
 
-```
-Smart-Waste-Bin-Project/
-├── README.md            # Instructions for project reproduction and info
-├── requirements.txt
-└── src/
-    └── pirlib/
-        ├── __init__.py
-        ├── sampler.py      # GPIO read abstraction (stubs on non-Pi)
-        └── interpreter.py  # Raw bool → motion events (cooldown + min-high)
-```
+
+
 
 *Made with ❤️ by Team 8 · ECE Upatras*
 
@@ -41,6 +32,23 @@ Smart-Waste-Bin-Project/
 | Python | 3.10 + |
 | RPi.GPIO | 0.7 +|
 ---
+
+## Project Structure
+
+```
+Smart-Waste-Bin-Project/
+├── README.md                    # Project documentation
+├── requirements.txt             # Python dependencies
+├── setup.py                     # Package configuration
+├── .gitignore                   # Git ignore rules
+└── src/
+    └── pirlib/
+        ├── __init__.py
+        ├── sampler.py           # GPIO abstraction layer
+        ├── interpreter.py       # Motion event detector
+        └── config.py            # Configuration constants
+```
+
 
 ## 1 — Create and activate a virtual environment
 
@@ -79,6 +87,10 @@ pip install -r requirements.txt
 
 ---
 
+
+
+
+
 ## 4 — Run the logger
 
 ### Minimal (uses all defaults)
@@ -113,6 +125,10 @@ python pir_event_logger.py \
 | `--duration` | float | `30.0` | Total run time in seconds (`0` = run until Ctrl-C) |
 | `--out` | str | `motion_events.jsonl` | Output file (append-only) |
 | `--verbose` / `-v` | flag | off | Print each event to stdout |
+
+
+
+
 
 ### Exit codes
 
@@ -189,3 +205,5 @@ on every raw sample before an event is ever written to disk:
 ```bash
 deactivate
 ```
+
+
