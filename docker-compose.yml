@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   mosquitto:
     image: eclipse-mosquitto:2
@@ -12,14 +10,14 @@ services:
     build: .
     command: python producer.py --verbose --host mosquitto
     devices:
-      - /dev/gpiochip0:/dev/gpiochip0  # GPIO access
+      - /dev/gpiochip0:/dev/gpiochip0
     depends_on:
       - mosquitto
 
   consumer:
     build: .
-    command: python consumer.py --verbose --host mosquitto
+    command: python consumer.py --verbose --host mosquitto --out /app/data/motion_events.jsonl
     volumes:
-      - ./data:/app/data        # persist the JSONL output
+      - ./data:/app/data
     depends_on:
       - mosquitto
