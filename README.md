@@ -16,6 +16,15 @@
 
 ---
 
+# terminal 1
+docker compose up mosquitto
+
+# terminal 2
+docker compose up producer
+
+# terminal 3
+docker compose up consumer
+
 
 
 *Made with ❤️ by Team 8 · ECE Upatras*
