@@ -43,7 +43,7 @@ JSONLD_CONTEXT = {
     "sosa": "http://www.w3.org/ns/sosa/",
     "ssn": "http://www.w3.org/ns/ssn/",
     "xsd": "http://www.w3.org/2001/XMLSchema#",
-    "pipeline": "https://github.com/manosmax/Pie/blob/main/docs/Ontology#",
+    "pipeline": "https://github.com/manosmax/Smart-Waste-Bin/blob/main/docs/Ontology#",
     "event_time":           {"@id": "sosa:resultTime",        "@type": "xsd:dateTime"},
     "ingest_time":          {"@id": "pipeline:ingestTime",    "@type": "xsd:dateTime"},
     "device_id":            {"@id": "sosa:madeBySensor",      "@type": "@id"},
@@ -162,6 +162,9 @@ def main() -> None:
     publisher_t.start()
 
     start_t = time.time()
+
+
+    #information for events 
     try:
         while (time.time() - start_t) < args.duration:
             if args.verbose:
