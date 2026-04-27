@@ -62,6 +62,12 @@ docker compose up consumer
 
 Events are saved to `data/motion_events.jsonl`.
 
+``` Bash 
+# In order to view the jsonl output with a preetier format run : 
+while IFS= read -r line; do echo "$line" | python -m json.tool; echo "---"; done < data/motion_events.jsonl
+``` 
+
+
 To pass custom arguments, override the command in `docker-compose.yml`:
 
 ```yaml
