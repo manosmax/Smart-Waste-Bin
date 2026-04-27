@@ -47,8 +47,12 @@ Smart-Waste-Bin/
 
 ---
 
-## Run with Docker
+## Build 
+```bash 
+docker compose build
+``` 
 
+## Run with Docker
 ```bash
 # Terminal 1 — MQTT broker
 docker compose up mosquitto
