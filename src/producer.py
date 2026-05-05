@@ -43,7 +43,7 @@ JSONLD_CONTEXT = {
     "sosa": "http://www.w3.org/ns/sosa/",
     "ssn": "http://www.w3.org/ns/ssn/",
     "xsd": "http://www.w3.org/2001/XMLSchema#",
-    "pipeline": "https://github.com/manosmax/Smart-Waste-Bin/blob/main/docs/Ontology#",
+    "pipeline": "https://github.com/manosmax/Pie/blob/main/docs/ontology.md#",
     "event_time":           {"@id": "sosa:resultTime",        "@type": "xsd:dateTime"},
     "ingest_time":          {"@id": "pipeline:ingestTime",    "@type": "xsd:dateTime"},
     "device_id":            {"@id": "sosa:madeBySensor",      "@type": "@id"},
@@ -83,7 +83,7 @@ def producer_loop(
                 "motion_state": "detected",
                 "seq": seq,
                 "run_id": run_id,
-                "mounted_on": "urn:wastebin:bin-01",
+                "mounted_on": "urn:wastebin:team08:bin-01",
             }
             try:
                 event_q.put_nowait(record)
@@ -144,13 +144,13 @@ def main() -> None:
     sampler = PirSampler(pin=args.pin)
     interp = PirInterpreter(cooldown_s=args.cooldown, min_high_s=args.min_high)
 
-    # producer reads from the raw data and creates an event on the queue 
+    # producer reads from the raw data and creates an event on the queue
     producer_t = threading.Thread(
         target=producer_loop,
         args=(event_q, sampler, interp, args, metrics, stop_flag),
         daemon=True,
     )
-    #publishes on the mqtt broker on the specified port 
+    # publishes on the mqtt broker on the specified port
     publisher_t = threading.Thread(
         target=publisher_loop,
         args=(event_q, args, metrics, stop_flag),
@@ -163,8 +163,7 @@ def main() -> None:
 
     start_t = time.time()
 
-
-    #information for events 
+    # information for events
     try:
         while (time.time() - start_t) < args.duration:
             if args.verbose:

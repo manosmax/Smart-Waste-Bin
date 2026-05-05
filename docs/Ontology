@@ -9,7 +9,7 @@
 | Term | Type | Description |
 |------|------|-------------|
 | `sequenceNumber` | `xsd:integer` | Per-run monotonic counter. Resets on new run. Detects gaps/reordering. |
-| `runId` | `xsd:string` | UUID per `pipeline.py` invocation. Groups events from one execution. |
+| `runId` | `xsd:string` | UUID per `producer.py` invocation. Groups events from one execution. |
 | `ingestTime` | `xsd:dateTime` | UTC time when consumer dequeues a record. Distinct from `sosa:resultTime`. |
 | `latencyMs` | `xsd:decimal` | Milliseconds between `sosa:resultTime` and `pipeline:ingestTime`. Rising value = consumer lag. |
 
@@ -41,8 +41,7 @@
 | Term | Type | Description |
 |------|------|-------------|
 | `spatialHierarchy` | object | Containment chain: campus → building → floor → room. Use `TBD` for unknowns. |
+| `roomNumber` | `xsd:string` | Room or office number within the building. |
 | `trafficLevel` | `xsd:string` | Pedestrian activity: `low`, `medium`, or `high`. |
 | `contains` | `@id[]` | Wastebins physically inside this environment. |
 | `hostsSensors` | `@id[]` | All sensors deployed in this environment. |
-
-
