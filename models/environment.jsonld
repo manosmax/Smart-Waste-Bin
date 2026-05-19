@@ -7,7 +7,7 @@
     "xsd":      "http://www.w3.org/2001/XMLSchema#"
   },
 
-  "@id":   "urn:env:team08:kypes",
+  "@id":   "urn:env:kypes",
   "@type": "bot:Space",
 
   "name":        "Kypes Lab",
@@ -26,7 +26,7 @@
   "pipeline:trafficLevel": "high",
 
   "pipeline:contains": [
-    "urn:wastebin:team08:bin-01"
+    "urn:wastebin:bin-01"
   ],
 
   "pipeline:hostsSensors": [

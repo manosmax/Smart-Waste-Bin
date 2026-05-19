@@ -11,7 +11,7 @@
   "@id":   "urn:dev:team08:pir-01",
   "@type": "sosa:Sensor",
 
-  "name":        "HC-SR501 PIR Motion Sensor — Bin 08",
+  "name":        "HC-SR501 PIR Motion Sensor — Bin 01",
   "description": "HC-SR501 passive infrared motion sensor. Detects motion by sensing differential changes in infrared radiation.",
   "model":       "HC-SR501",
 
@@ -94,8 +94,8 @@
     "@type":  "xsd:string"
   },
 
-  "sosa:isHostedBy":     "urn:wastebin:team08:bin-01",
-  "pipeline:deployedIn": "urn:env:team08:kypes",
+  "sosa:isHostedBy":     "urn:wastebin:bin-01",
+  "pipeline:deployedIn": "urn:env:kypes",
 
   "pipeline:status": {
     "@value": "active",

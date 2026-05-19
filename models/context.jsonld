@@ -49,6 +49,16 @@
     "pipeline_latency_ms": {
       "@id":   "pipeline:latencyMs",
       "@type": "xsd:decimal"
+    },
+
+    "item_count": {
+      "@id":   "pipeline:itemCount",
+      "@type": "xsd:integer"
+    },
+
+    "fill_level": {
+      "@id":   "pipeline:fillLevel",
+      "@type": "xsd:integer"
     }
   }
 }

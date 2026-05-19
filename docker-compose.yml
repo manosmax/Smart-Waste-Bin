@@ -11,6 +11,8 @@ services:
     command: python producer.py --verbose --host mosquitto
     devices:
       - /dev/gpiochip0:/dev/gpiochip0
+    volumes:
+      - ./data:/app/data       
     depends_on:
       - mosquitto
 
@@ -21,3 +23,29 @@ services:
       - ./data:/app/data
     depends_on:
       - mosquitto
+
+  api:
+    build: .
+    command: python api.py
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/app/data        
+    environment:
+      - MQTT_BROKER=mosquitto  
+    depends_on:
+      - mosquitto
+
+  virtual_sensor_rules:
+    build: .
+    command: python virtual_sensor_rules.py --broker mosquitto
+    depends_on:
+      - mosquitto
+      - producer               
+
+  virtual_sensor_ml:
+    build: .
+    command: python virtual_sensor_ml.py --broker mosquitto
+    depends_on:
+      - mosquitto
+      - producer               

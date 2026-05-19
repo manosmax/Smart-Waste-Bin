@@ -1,3 +1,7 @@
 paho-mqtt
 lgpio
-pirlib
+flask
+flask-restx
+scikit-learn 
+pandas 
+joblib
