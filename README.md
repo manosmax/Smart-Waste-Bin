@@ -2,10 +2,12 @@
 
 > An IoT edge-computing pipeline that monitors bin occupancy via a PIR motion sensor,
 > publishes structured events over MQTT, stores them in SQLite, classifies usage intensity
-> with rule-based and ML virtual sensors, exposes a REST API with Swagger UI, and surfaces
+> with rule-based and ML virtual sensors, exposes a REST API with Swagger UI and AsyncApi,
+>  utilizes Node-RED for low code integration
+> as well as Cloudflare Tunnel for easy acess and surfaces
 > all entities in Home Assistant — all in a single `docker compose up --build`.
 
-**Team 08** · Internet of Things Lab · 2025–2026
+**Team 08** · Advanced Programming Techniques ECE Upatras · 2026
 
 ---
 
@@ -73,7 +75,7 @@ HC-SR501 PIR sensor
 | Raspberry Pi 4 (or 3B+) | 1 | Any model with 40-pin GPIO header |
 | HC-SR501 PIR Motion Sensor | 1 | 3–20 V supply, 3.3 V output — Pi-compatible |
 | Female-to-female jumper wires | 3 | |
-| Waste bin (~18 cm height) | 1 | Sensor mounts above aperture |
+| Waste bin (~18 cm height) | 1 | Sensor mounts at the back of the bin's body |
 
 ### GPIO Wiring
 
@@ -98,21 +100,18 @@ OUT  (signal)   ──►   GPIO 17 (BCM)              Pin 11
     ...
 ```
 
-> **Sensor orientation**: Mount the HC-SR501 dome-side down, centred above the bin lid
-> opening, at a height of 2–5 cm for reliable detection without false triggers from
-> ambient movement. Set the potentiometers: sensitivity mid-range (~3 m), time-delay
-> minimum (~3 s). Set the jumper to **H** (repeat trigger) mode.
 
 ### Physical mounting (cross-section view)
 
 ```
+        ─ ─ ─ ─ ─ ─ ─ ─ ─ ─  ← bin lid
         ┌──────────────────┐
-        │   HC-SR501 dome  │  ← mounted on underside of lid
+        │   HC-SR501 dome  │  ← mounted on the back
         └────────┬─────────┘
-                 │ ~3 cm
-        ─ ─ ─ ─ ─ ─ ─ ─ ─ ─  ← bin aperture (open)
+                 
+        
         │                    │
-        │       BIN          │  18 cm tall
+        │       BIN          │  
         │    interior        │
         │                    │
         └────────────────────┘
@@ -152,7 +151,7 @@ sudo usermod -aG docker $USER
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/your-team/smartbin.git
+git clone https://github.com/manos-max/Smart-Waste-Bin.git
 cd smartbin
 
 # 2. (Raspberry Pi only) Ensure GPIO device exists
@@ -174,10 +173,6 @@ docker compose up --build
 #   MQTT broker         →  localhost:1883
 ```
 
-> **No Raspberry Pi?** The system starts on any machine. The producer falls back to a
-> GPIO stub (`PirSampler.read()` always returns `False`) — no events are generated but
-> all other services (API, consumer, virtual sensors, Node-RED, DB) run normally.
-> Use `POST /mqtt/publish` via Swagger to inject synthetic events for testing.
 
 ---
 
