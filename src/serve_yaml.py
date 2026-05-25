@@ -6,5 +6,8 @@ class YAMLHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
         super().end_headers()
 
-http.server.HTTPServer(('', 5002), YAMLHandler).serve_forever()
+def main():
+    http.server.HTTPServer(('', 5002), YAMLHandler).serve_forever()
 
+if __name__ == "__main__":
+    main()
