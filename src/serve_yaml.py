@@ -5,6 +5,7 @@ class YAMLHandler(http.server.SimpleHTTPRequestHandler):
         if self.path.endswith('.yml'):
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
             self.send_header('X-Content-Type-Options', 'nosniff')
+            self.send_header('Access-Control-Allow-Origin', '*')
         super().end_headers()
 
 def main():
