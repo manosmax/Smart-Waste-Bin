@@ -68,6 +68,7 @@ services:
     depends_on:
       - mosquitto
       - producer
+
   upload:
     build: .
     command: python upload.py
@@ -75,17 +76,20 @@ services:
       - "5001:5001"
     volumes:
       - ./data:/app/data
+    networks:
+      - smartbin-net
     depends_on:
       - mosquitto
 
   asyncapi-docs:
-    image: python:3.11-slim
-    working_dir: /app
+    build: .
     command: python3 serve_yaml.py
     ports:
       - "5002:5002"
     volumes:
       - ./asyncapi.yml:/app/asyncapi.yml:ro
+    networks:
+      - smartbin-net
 
 networks:
   smartbin-net:
