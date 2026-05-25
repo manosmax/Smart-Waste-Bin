@@ -87,10 +87,6 @@ services:
     volumes:
       - ./asyncapi.yml:/app/asyncapi.yml:ro
       - ./serve_yaml.py:/app/serve_yaml.py:ro
-    ports:
-      - "5002:5002"
-    volumes:
-      - ./asyncapi.yml:/app/asyncapi.yml:ro
 
 networks:
   smartbin-net:
