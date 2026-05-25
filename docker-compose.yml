@@ -81,12 +81,11 @@ services:
   asyncapi-docs:
     image: python:3.11-slim
     working_dir: /app
-    command: python serve_yaml.py
+    command: python3 serve_yaml.py
     ports:
       - "5002:5002"
     volumes:
       - ./asyncapi.yml:/app/asyncapi.yml:ro
-      - ./serve_yaml.py:/app/serve_yaml.py:ro
 
 networks:
   smartbin-net:
