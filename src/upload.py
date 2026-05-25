@@ -1,8 +1,14 @@
-import os, json, uuid
+import os
+import uuid
 from datetime import datetime, timezone
-from flask import Flask, request, jsonify
+from flask import Flask, request, render_template_string, make_response
 from flask_restx import Api, Resource
-from flask import Flask, request, jsonify, render_template_string
+
+app = Flask(__name__)
+api = Api(app, title="Training Data Upload")
+
+UPLOAD_DIR = "/app/data/uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 UPLOAD_HTML = """
 <!DOCTYPE html>
@@ -18,39 +24,26 @@ UPLOAD_HTML = """
 </html>
 """
 
+ns = api.namespace("upload", description="Upload endpoints")
+
 @ns.route("/")
 class UploadPage(Resource):
     def get(self):
-        """Simple upload form."""
-        from flask import make_response
         return make_response(render_template_string(UPLOAD_HTML), 200)
-
-app = Flask(__name__)
-api = Api(app, title="Training Data Upload",
-          description="Drop new CSV training data for virtual_sensor_ml retraining")
-
-UPLOAD_DIR = "/app/data/uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-ns = api.namespace("upload", description="Upload endpoints")
 
 @ns.route("/training-data")
 class TrainingUpload(Resource):
     def post(self):
-        """Upload a CSV file to retrain the ML virtual sensor."""
         if "file" not in request.files:
-            api.abort(400, "No file provided — field name must be 'file'")
+            api.abort(400, "No file — field name must be 'file'")
         f = request.files["file"]
         if not f.filename.endswith(".csv"):
             api.abort(400, "Only .csv files accepted")
         filename = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}_{uuid.uuid4().hex[:8]}.csv"
-        path = os.path.join(UPLOAD_DIR, filename)
-        f.save(path)
-
+        f.save(os.path.join(UPLOAD_DIR, filename))
         return {"status": "saved", "filename": filename}, 200
 
     def get(self):
-        """List uploaded training files."""
         files = sorted(os.listdir(UPLOAD_DIR))
         return {"files": files, "count": len(files)}, 200
 

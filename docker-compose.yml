@@ -81,16 +81,12 @@ services:
   asyncapi-docs:
     image: python:3.11-slim
     working_dir: /app
-    command: >
-      python3 -c "
-      import http.server
-      class H(http.server.SimpleHTTPRequestHandler):
-        def end_headers(self):
-          if self.path.endswith('.yml'):
-            self.send_header('Content-Type','text/plain; charset=utf-8')
-          super().end_headers()
-      http.server.HTTPServer(('',5002),H).serve_forever()
-      "
+    command: python3 serve_yaml.py
+    ports:
+      - "5002:5002"
+    volumes:
+      - ./asyncapi.yml:/app/asyncapi.yml:ro
+      - ./serve_yaml.py:/app/serve_yaml.py:ro
     ports:
       - "5002:5002"
     volumes:
