@@ -76,6 +76,7 @@ services:
       - "5001:5001"
     volumes:
       - ./data:/app/data
+      - ./models_v_s:/app/models_v_s
     networks:
       - smartbin-net
     depends_on:
