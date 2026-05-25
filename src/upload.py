@@ -1,16 +1,3 @@
-"""
-Smart Wastebin — Training Data Upload & Visualisation Service
-=============================================================
-Serves on :5001.  Exposes:
-  GET  /          →  HTML dashboard (file list + charts for last upload)
-  POST /upload    →  Accept a .csv file, save it, return chart HTML page
-  GET  /uploads/<filename>  →  Download a specific saved CSV
-  POST /retrain   →  Retrain the model with the most recently uploaded CSV
-
-Expected CSV columns (same as train_model.py output):
-  day_of_week, hour, is_weekend, event_count, label
-"""
-
 import base64
 import io
 import os
@@ -20,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import matplotlib
-matplotlib.use("Agg")          # no display needed in Docker
+matplotlib.use("Agg")         
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
@@ -28,7 +15,7 @@ import pandas as pd
 import seaborn as sns
 from flask import Flask, redirect, render_template_string, request, send_from_directory, url_for
 
-# ── config ──────────────────────────────────────────────────────────────────
+
 app = Flask(__name__)
 UPLOAD_DIR  = Path("/app/data/uploads")
 MODEL_DIR   = Path("/app/models_v_s")
@@ -38,7 +25,7 @@ MODEL_DIR.mkdir(parents=True, exist_ok=True)
 REQUIRED_COLS = {"day_of_week", "hour", "is_weekend", "event_count", "label"}
 DAY_NAMES     = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
-# ── seaborn / matplotlib theme ───────────────────────────────────────────────
+
 PALETTE = {"busy": "#D85A30", "quiet": "#1D9E75"}
 sns.set_theme(style="whitegrid", font="DejaVu Sans", font_scale=1.1)
 plt.rcParams.update({
@@ -55,10 +42,9 @@ plt.rcParams.update({
 })
 
 
-# ── helpers ──────────────────────────────────────────────────────────────────
+
 
 def fig_to_b64(fig) -> str:
-    """Render a matplotlib figure to a base64 PNG string."""
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=130, bbox_inches="tight")
     buf.seek(0)
@@ -68,7 +54,6 @@ def fig_to_b64(fig) -> str:
 
 
 def validate_csv(df: pd.DataFrame) -> list[str]:
-    """Return a list of validation warnings (empty = ok)."""
     warnings = []
     missing = REQUIRED_COLS - set(df.columns)
     if missing:
@@ -89,13 +74,9 @@ def validate_csv(df: pd.DataFrame) -> list[str]:
 
 
 def make_charts(df: pd.DataFrame) -> dict[str, str]:
-    """
-    Generate all visualisation charts.
-    Returns a dict of { chart_name: base64_png_string }.
-    """
     charts = {}
 
-    # ── 1. class balance ────────────────────────────────────────────────────
+    
     fig, ax = plt.subplots(figsize=(4.5, 3.2))
     counts   = df["label"].value_counts().reindex(["busy", "quiet"], fill_value=0)
     bars     = ax.bar(counts.index, counts.values,
@@ -110,7 +91,7 @@ def make_charts(df: pd.DataFrame) -> dict[str, str]:
     ax.set_ylim(0, counts.max() * 1.15)
     charts["class_balance"] = fig_to_b64(fig)
 
-    # ── 2. event_count distribution by label ────────────────────────────────
+    
     fig, ax = plt.subplots(figsize=(6, 3.5))
     for label, color in PALETTE.items():
         subset = df[df["label"] == label]["event_count"]
@@ -126,7 +107,7 @@ def make_charts(df: pd.DataFrame) -> dict[str, str]:
     ax.legend(frameon=False)
     charts["event_dist"] = fig_to_b64(fig)
 
-    # ── 3. mean event count by hour (weekday vs weekend) ────────────────────
+    
     if {"hour", "is_weekend", "event_count"}.issubset(df.columns):
         fig, ax = plt.subplots(figsize=(8, 3.5))
         for is_wknd, label, color, ls in [
@@ -143,7 +124,7 @@ def make_charts(df: pd.DataFrame) -> dict[str, str]:
         ax.legend(frameon=False)
         charts["hourly_pattern"] = fig_to_b64(fig)
 
-    # ── 4. heatmap: avg event count  hour × day_of_week ─────────────────────
+    
     if {"hour", "day_of_week", "event_count"}.issubset(df.columns):
         pivot = (
             df.groupby(["day_of_week", "hour"])["event_count"]
@@ -169,7 +150,7 @@ def make_charts(df: pd.DataFrame) -> dict[str, str]:
         ax.tick_params(axis="y", rotation=0)
         charts["heatmap"] = fig_to_b64(fig)
 
-    # ── 5. label by day of week ──────────────────────────────────────────────
+    
     if {"day_of_week", "label"}.issubset(df.columns):
         day_label = (
             df.groupby(["day_of_week", "label"])
@@ -214,7 +195,7 @@ def summary_stats(df: pd.DataFrame) -> dict:
     return stats
 
 
-# ── HTML template ────────────────────────────────────────────────────────────
+
 
 PAGE = """<!DOCTYPE html>
 <html lang="en">
@@ -496,7 +477,7 @@ function triggerRetrain() {
 """
 
 
-# ── routes ───────────────────────────────────────────────────────────────────
+
 
 def _file_list():
     rows = []
@@ -533,13 +514,13 @@ def upload():
             message="Only .csv files are accepted.", ok=False, warnings=[],
         )
 
-    # Save
+    
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
     safe_name = f"{timestamp}_{uuid.uuid4().hex[:8]}.csv"
     save_path = UPLOAD_DIR / safe_name
     f.save(save_path)
 
-    # Parse
+    
     try:
         df = pd.read_csv(save_path)
     except Exception as exc:
@@ -570,14 +551,14 @@ def download(filename):
 
 @app.route("/retrain", methods=["POST"])
 def retrain():
-    """Retrain the busy_predictor model using the most recently uploaded CSV."""
+    
     csv_files = sorted(UPLOAD_DIR.glob("*.csv"), reverse=True)
     if not csv_files:
         return {"ok": False, "error": "No CSV files uploaded yet."}, 400
 
     latest = csv_files[0]
     try:
-        # Patch train_model to accept an optional source CSV
+        
         import sys
         sys.path.insert(0, "/app")
         from train_model import generate_training_data, train_and_save  # noqa: F401
@@ -587,7 +568,7 @@ def retrain():
         if any("Missing columns" in w for w in warnings):
             return {"ok": False, "error": "; ".join(warnings)}, 400
 
-        # Use the uploaded data directly
+        
         from sklearn.ensemble import RandomForestClassifier
         from sklearn.model_selection import train_test_split
         from sklearn.metrics import classification_report
@@ -616,6 +597,6 @@ def retrain():
         return {"ok": False, "error": str(exc)}, 500
 
 
-# ── entry point ──────────────────────────────────────────────────────────────
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001, debug=False)
