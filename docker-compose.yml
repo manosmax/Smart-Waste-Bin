@@ -78,13 +78,23 @@ services:
     depends_on:
       - mosquitto
 
-  asyncapi-docs:
+asyncapi-docs:
     image: python:3.11-slim
-    command: python -m http.server 5002 --directory /asyncapi-docs
+    working_dir: /app
+    command: >
+      python3 -c "
+      import http.server
+      class H(http.server.SimpleHTTPRequestHandler):
+        def end_headers(self):
+          if self.path.endswith('.yml'):
+            self.send_header('Content-Type','text/plain; charset=utf-8')
+          super().end_headers()
+      http.server.HTTPServer(('',5002),H).serve_forever()
+      "
     ports:
       - "5002:5002"
     volumes:
-      - ./asyncapi-docs:/asyncapi-docs:ro
+      - ./asyncapi.yml:/app/asyncapi.yml:ro
 
 networks:
   smartbin-net:

@@ -2,6 +2,28 @@ import os, json, uuid
 from datetime import datetime, timezone
 from flask import Flask, request, jsonify
 from flask_restx import Api, Resource
+from flask import Flask, request, jsonify, render_template_string
+
+UPLOAD_HTML = """
+<!DOCTYPE html>
+<html>
+<body style="font-family:sans-serif;max-width:500px;margin:60px auto;padding:20px">
+  <h2>Upload Training CSV</h2>
+  <form method="POST" action="/upload/training-data" enctype="multipart/form-data">
+    <input type="file" name="file" accept=".csv" required>
+    <br><br>
+    <button type="submit">Upload</button>
+  </form>
+</body>
+</html>
+"""
+
+@ns.route("/")
+class UploadPage(Resource):
+    def get(self):
+        """Simple upload form."""
+        from flask import make_response
+        return make_response(render_template_string(UPLOAD_HTML), 200)
 
 app = Flask(__name__)
 api = Api(app, title="Training Data Upload",
