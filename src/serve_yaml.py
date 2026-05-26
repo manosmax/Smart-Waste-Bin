@@ -1,15 +1,14 @@
-import http.server
+from flask import Flask, send_file, abort
 
-class YAMLHandler(http.server.SimpleHTTPRequestHandler):
-    def end_headers(self):
-        if self.path.endswith('.yml'):
-            self.send_header('Content-Type', 'text/plain; charset=utf-8')
-            self.send_header('X-Content-Type-Options', 'nosniff')
-            self.send_header('Access-Control-Allow-Origin', '*')
-        super().end_headers()
+app = Flask(__name__)
 
-def main():
-    http.server.HTTPServer(('', 5002), YAMLHandler).serve_forever()
+@app.route("/")
+def index():
+    return send_file("/app/asyncapi.yml", mimetype="text/plain")
+
+@app.route("/<path:anything>")
+def block(anything):
+    abort(404)   # every other path → 404, nothing exposed
 
 if __name__ == "__main__":
-    main()
+    app.run(host="0.0.0.0", port=5002, debug=False)
