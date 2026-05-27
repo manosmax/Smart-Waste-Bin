@@ -91,9 +91,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--pin",             type=int,   default=17)
     p.add_argument("--sample-interval", type=float, default=0.1)
     p.add_argument("--cooldown",        type=float, default=5.0)
-    p.add_argument("--min-high",        type=float, default=0.5)
+    p.add_argument("--min-high",        type=float, default=0.2)
     p.add_argument("--queue-size",      type=int,   default=100)
-    p.add_argument("--duration",        type=float, default=600.0)
+    p.add_argument("--duration",        type=float, default=7200.0)
     p.add_argument("--host",            default="localhost")
     p.add_argument("--port",            type=int,   default=1883)
     p.add_argument("--qos",             type=int,   default=1)
@@ -116,7 +116,7 @@ def send_discovery(client, bin_id: str, sensor_id: str, pir_topic: str, fill_top
     }
 
     pir_config = {
-        "name": f"Waste Bin {bin_id} Motion",
+        "name": f"Waste Bin {bin_id} : {sensor_id} Motion",
         "state_topic": pir_topic,
         "payload_on": "detected",
         "payload_off": "clear",
@@ -213,6 +213,7 @@ def publisher_loop(
     state: dict,
 ) -> None:
     topic, qos = args.topic, args.qos
+    
     ha_pir_topic  = f"smartbin/{args.bin_id}/{args.sensor_id}/motion"
     ha_fill_topic = f"smartbin/{args.bin_id}/fill-level/state"
    
