@@ -113,6 +113,9 @@ services:
       - smartbin-net
     depends_on:
       - mosquitto
+tester: 
+    build: .
+    command: python tester.py 
 
   asyncapi-docs:
     build: .
