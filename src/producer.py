@@ -91,7 +91,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--pin",             type=int,   default=17)
     p.add_argument("--sample-interval", type=float, default=0.1)
     p.add_argument("--cooldown",        type=float, default=5.0)
-    p.add_argument("--min-high",        type=float, default=0.2)
+    p.add_argument("--min-high",        type=float, default=0.5)
     p.add_argument("--queue-size",      type=int,   default=100)
     p.add_argument("--duration",        type=float, default=7200.0)
     p.add_argument("--host",            default="localhost")
