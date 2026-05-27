@@ -6,7 +6,12 @@ ENV PYTHONUNBUFFERED=1
 
 RUN apt-get update && apt-get install -y \
     gcc \
+    swig \
+    python3-dev \
+    python3-setuptools \
+    make \
     && rm -rf /var/lib/apt/lists/*
+
 
 COPY requirements.txt .
 
