@@ -11,6 +11,7 @@ services:
   producer:
     build: .
     command: python producer.py --verbose --host mosquitto
+    privileged: true                       
     devices:
     - /dev/gpiochip0:/dev/gpiochip0  
     volumes:
