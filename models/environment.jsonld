@@ -3,7 +3,7 @@
     "@vocab":   "https://schema.org/",
     "bot":      "https://w3id.org/bot#",
     "sosa":     "http://www.w3.org/ns/sosa/",
-    "pipeline": "https://github.com/manosmax/Pie/blob/main/docs/ontology.md#",
+    "pipeline": "https://github.com/manosmax/Smart-Waste-Bin/blob/main/docs/Ontology.md#",
     "xsd":      "http://www.w3.org/2001/XMLSchema#"
   },
 

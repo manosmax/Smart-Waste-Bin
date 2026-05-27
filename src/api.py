@@ -166,26 +166,35 @@ def _bootstrap_registries():
 
     env_name = env.get("name", env.get("@id", "Unknown"))
 
-    if wb:
-        bin_uri  = wb.get("@id", "")
+    # Support both single-object (old) and @graph array (new) formats
+    bin_nodes = wb.get("@graph", [wb]) if wb else []
+
+    for node in bin_nodes:
+        bin_uri  = node.get("@id", "")
+        if not bin_uri:
+            continue
         bin_id   = _uri_to_short_id(bin_uri)
-        raw_stat = wb.get("pipeline:status", "active")
+        raw_stat = node.get("pipeline:status", "active")
         status   = raw_stat.get("@value", "active") if isinstance(raw_stat, dict) else raw_stat
         with db_lock:
-            upsert_bin(db_conn, bin_id, bin_uri, wb.get("name", ""), env_name, status)
+            upsert_bin(db_conn, bin_id, bin_uri, node.get("name", ""), env_name, status)
 
-    if s:
-        sensor_uri  = s.get("@id", "")
-        sensor_id   = _uri_to_short_id(sensor_uri)
-        mounted_uri = s.get("sosa:isHostedBy", "")
-        bin_id_s    = _uri_to_short_id(mounted_uri) if mounted_uri else None
-        raw_stat    = s.get("pipeline:status", "active")
-        status      = raw_stat.get("@value", "active") if isinstance(raw_stat, dict) else raw_stat
-        with db_lock:
-            upsert_sensor(db_conn, sensor_id, sensor_uri, "PIR",
-                          s.get("model", ""), status)
-            if bin_id_s:
-                upsert_mounted_on(db_conn, sensor_id, bin_id_s)
+        sensor_nodes = s.get("@graph", [s]) if s else []
+
+        for node in sensor_nodes:
+            sensor_uri  = node.get("@id", "")
+            if not sensor_uri:
+                continue
+            sensor_id   = _uri_to_short_id(sensor_uri)
+            mounted_uri = node.get("sosa:isHostedBy", "")
+            bin_id_s    = _uri_to_short_id(mounted_uri) if mounted_uri else None
+            raw_stat    = node.get("pipeline:status", "active")
+            status      = raw_stat.get("@value", "active") if isinstance(raw_stat, dict) else raw_stat
+            with db_lock:
+                upsert_sensor(db_conn, sensor_id, sensor_uri, "PIR",
+                            node.get("model", ""), status)
+                if bin_id_s:
+                    upsert_mounted_on(db_conn, sensor_id, bin_id_s)
 
 
 _bootstrap_registries()
