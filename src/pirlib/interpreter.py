@@ -1,7 +1,7 @@
 from typing import Optional, List, Dict
 
 class PirInterpreter:
-    def __init__(self, cooldown_s: float = 0.0, min_high_s: float = 0.0):
+    def __init__(self, cooldown_s: float = 0.0, min_high_s: float = 0.5):
         self.cooldown_s = cooldown_s
         self.min_high_s = min_high_s
 
