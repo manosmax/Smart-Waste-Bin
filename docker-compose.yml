@@ -11,9 +11,8 @@ services:
   producer:
     build: .
     command: python producer.py --verbose --host mosquitto
-    privileged: true                        # ← lgpio needs full GPIO access
     devices:
-      - /dev/gpiochip0:/dev/gpiochip0
+    - /dev/gpiomem:/dev/gpiomem    
     volumes:
       - ./data:/app/data
     networks:

@@ -1,5 +1,5 @@
 paho-mqtt
-lgpio
+RPi.GPIO
 flask
 flask-restx
 scikit-learn
