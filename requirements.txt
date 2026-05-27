@@ -1,7 +1,6 @@
 paho-mqtt
 flask
-gpiozero
-lgpio
+rpi-lgpio
 flask-restx
 scikit-learn
 pandas

@@ -1,26 +1,23 @@
-import os
-os.environ["GPIOZERO_PIN_FACTORY"] = "lgpio"   
-
 try:
-    from gpiozero import DigitalInputDevice
+    import RPi.GPIO as GPIO
     _GPIO_AVAILABLE = True
 except Exception:
-    DigitalInputDevice = None
+    GPIO = None
     _GPIO_AVAILABLE = False
-
 
 class PirSampler:
     def __init__(self, pin: int):
         self.pin = pin
         self._stub = not _GPIO_AVAILABLE
         if not self._stub:
-            self._device = DigitalInputDevice(pin)
+            GPIO.setmode(GPIO.BCM)
+            GPIO.setup(pin, GPIO.IN)
 
     def read(self) -> bool:
         if self._stub:
             return False
-        return bool(self._device.value)
+        return bool(GPIO.input(self.pin))
 
     def cleanup(self):
         if not self._stub:
-            self._device.close()
+            GPIO.cleanup(self.pin)
