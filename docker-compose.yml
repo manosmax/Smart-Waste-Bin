@@ -8,10 +8,10 @@ services:
     networks:
       - smartbin-net
 
-
   producer:
     build: .
     command: python producer.py --verbose --host mosquitto
+    privileged: true                        # ← lgpio needs full GPIO access
     devices:
       - /dev/gpiochip0:/dev/gpiochip0
     volumes:
@@ -20,7 +20,6 @@ services:
       - smartbin-net
     depends_on:
       - mosquitto
-
 
   consumer:
     build: .
@@ -37,29 +36,25 @@ services:
     depends_on:
       - mosquitto
 
-
   api:
     build: .
     command: python api.py
     ports:
       - "5000:5000"
     volumes:
-      - ./data:/app/data          # PIR state files
-      - ./models:/app/models      # JSON-LD model files (wastebin / sensor / environment)
-      - ./models_v_s:/app/models_v_s  # trained ML model
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./models_v_s:/app/models_v_s
     environment:
       - MQTT_BROKER=mosquitto
-      - DB_PATH=/app/data/smartbin.db   # SQLite database lives in the shared data volume
+      - DB_PATH=/app/data/smartbin.db
     networks:
       - smartbin-net
     depends_on:
       - mosquitto
 
-
   train_model:
     build: .
-    # Runs once on startup to train (or retrain) the ML model from real DB data.
-    # Restarts on failure so it retries until enough events have been collected.
     command: python train_model.py --output-dir /app/models_v_s --db-path /app/data/smartbin.db
     restart: on-failure
     volumes:
@@ -70,7 +65,6 @@ services:
     depends_on:
       - mosquitto
 
-
   virtual_sensor_rules:
     build: .
     command: python virtual_sensor_rules.py --broker mosquitto
@@ -79,7 +73,6 @@ services:
     depends_on:
       - mosquitto
       - producer
-
 
   virtual_sensor_ml:
     build: .
@@ -96,11 +89,11 @@ services:
     build: .
     command: python fictional_sensor.py --bin-id bin-02 --sensor-id pir-02 --host mosquitto
     networks:
-      - smartbin-net       
+      - smartbin-net
     depends_on:
       - mosquitto
     restart: unless-stopped
-      
+
   upload:
     build: .
     command: python upload.py
@@ -113,9 +106,6 @@ services:
       - smartbin-net
     depends_on:
       - mosquitto
-tester: 
-    build: .
-    command: python tester.py 
 
   asyncapi-docs:
     build: .
@@ -126,7 +116,6 @@ tester:
       - ./asyncapi.yml:/app/asyncapi.yml:ro
     networks:
       - smartbin-net
-
 
 networks:
   smartbin-net:
