@@ -11,7 +11,9 @@ services:
   producer:
     build: .
     command: python producer.py --verbose --host mosquitto
-    privileged: true                       
+    privileged: true  
+    environment:
+    - RPI_LGPIO_CHIP=0            
     devices:
     - /dev/gpiochip0:/dev/gpiochip0  
     volumes:
