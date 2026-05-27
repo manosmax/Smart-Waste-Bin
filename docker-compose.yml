@@ -91,6 +91,13 @@ services:
     depends_on:
       - mosquitto
       - producer
+
+  fictional-sensor:
+    build: .
+    command: python fictional_sensor.py --bin-id bin-02 --sensor-id pir-02 --host mosquitto
+    depends_on:
+      - mosquitto
+    restart: unless-stopped
       
   upload:
     build: .
