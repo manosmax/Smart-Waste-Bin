@@ -29,6 +29,7 @@ All data served from SQLite (smartbin.db) via database.py.
 """
 
 import json
+import logging
 import os
 import threading
 from datetime import datetime, timezone
@@ -39,6 +40,8 @@ import csv
 import paho.mqtt.client as mqtt
 from flask import Flask, Response
 from flask_restx import Api, Resource, fields, reqparse
+
+logger = logging.getLogger(__name__)
 
 from database import (
     DB_PATH,
@@ -166,11 +169,9 @@ def _bootstrap_registries():
 
     env_name = env.get("name", env.get("@id", "Unknown"))
 
-    # Support both single-object (old) and @graph array (new) formats
     bin_nodes = wb.get("@graph", [wb]) if wb else []
-
     for node in bin_nodes:
-        bin_uri  = node.get("@id", "")
+        bin_uri = node.get("@id", "")
         if not bin_uri:
             continue
         bin_id   = _uri_to_short_id(bin_uri)
@@ -178,25 +179,38 @@ def _bootstrap_registries():
         status   = raw_stat.get("@value", "active") if isinstance(raw_stat, dict) else raw_stat
         with db_lock:
             upsert_bin(db_conn, bin_id, bin_uri, node.get("name", ""), env_name, status)
+        logger.info("[BOOTSTRAP] Upserted bin: %s", bin_id)
 
-        sensor_nodes = s.get("@graph", [s]) if s else []
+    sensor_nodes = s.get("@graph", [s]) if s else []
+    for node in sensor_nodes:
+        sensor_uri = node.get("@id", "")
+        if not sensor_uri:
+            continue
+        sensor_id   = _uri_to_short_id(sensor_uri)
+        mounted_uri = node.get("sosa:isHostedBy", "")
+        bin_id_s    = _uri_to_short_id(mounted_uri) if mounted_uri else None
+        raw_stat    = node.get("pipeline:status", "active")
+        status      = raw_stat.get("@value", "active") if isinstance(raw_stat, dict) else raw_stat
 
-        for node in sensor_nodes:
-            sensor_uri  = node.get("@id", "")
-            if not sensor_uri:
-                continue
-            sensor_id   = _uri_to_short_id(sensor_uri)
-            mounted_uri = node.get("sosa:isHostedBy", "")
-            bin_id_s    = _uri_to_short_id(mounted_uri) if mounted_uri else None
-            raw_stat    = node.get("pipeline:status", "active")
-            status      = raw_stat.get("@value", "active") if isinstance(raw_stat, dict) else raw_stat
-            with db_lock:
-                upsert_sensor(db_conn, sensor_id, sensor_uri, "PIR",
-                            node.get("model", ""), status)
-                if bin_id_s:
+        with db_lock:
+            upsert_sensor(db_conn, sensor_id, sensor_uri, "PIR",
+                          node.get("model", ""), status)
+            logger.info("[BOOTSTRAP] Upserted sensor: %s", sensor_id)
+
+            if bin_id_s:
+                # Verify the bin actually exists before linking
+                exists = db_conn.execute(
+                    "SELECT 1 FROM Bins WHERE bin_id=?", (bin_id_s,)
+                ).fetchone()
+                if exists:
                     upsert_mounted_on(db_conn, sensor_id, bin_id_s)
-
-
+                    logger.info("[BOOTSTRAP] Mounted %s → %s", sensor_id, bin_id_s)
+                else:
+                    logger.warning(
+                        "[BOOTSTRAP] Skipping mount — bin '%s' not found for sensor '%s'. "
+                        "Check wastebin.jsonld has an entry for this bin.",
+                        bin_id_s, sensor_id
+                    )
 _bootstrap_registries()
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
