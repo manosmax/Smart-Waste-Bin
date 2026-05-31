@@ -575,7 +575,11 @@ Upload the csv `day_of_week,hour,is_weekend,event_count,label`
 - MQTT Integration configured and pointing at the Pi's broker
 
 ### Setup Steps
+#### Login page  
+username : anastasis
+password : 12345678
 
+#### Configuration 
 1. Open Home Assistant → **Settings → Devices & Services → MQTT -> three dots -> reconfigure**
 2. Set Broker to `<Raspberry Pi IP address>` and Port to `1883`
 3. Click **Submit** — no username/password needed for the default config
