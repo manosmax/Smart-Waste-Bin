@@ -1,11 +1,11 @@
+import csv
+import io
 import json
 import logging
 import os
 import threading
 from datetime import datetime, timezone
 from train_model import BUSY_THRESHOLD
-import io
-import csv
 
 import paho.mqtt.client as mqtt
 from flask import Flask, Response
@@ -16,12 +16,7 @@ logger = logging.getLogger(__name__)
 from database import (
     DB_PATH,
     get_connection,
-    init_db,
     insert_mqtt_message,
-    insert_pir_event,
-    upsert_bin,
-    upsert_sensor,
-    upsert_mounted_on,
     QUERY_PEAK_HOUR,
     QUERY_LEAST_HOUR,
     QUERY_WEEKLY_HEATMAP,
@@ -37,71 +32,29 @@ app = Flask(__name__)
 MQTT_BROKER = os.environ.get("MQTT_BROKER", "mosquitto")
 MQTT_PORT   = int(os.environ.get("MQTT_PORT", 1883))
 
-_BASE_DIR  = os.path.dirname(os.path.abspath(__file__))
-MODELS_DIR = os.path.join(_BASE_DIR, "models")
-ML_DIR     = os.path.join(_BASE_DIR, "models_v_s")
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ML_DIR    = os.path.join(_BASE_DIR, "models_v_s")
 
-init_db(DB_PATH)
+# ── DB connection (schema created by consumer; API is read + command-publish only) ──
 db_conn = get_connection(DB_PATH)
 db_lock = threading.Lock()
 
-
+# ── MQTT client — publish-only ────────────────────────────────────────────────
 mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, "wastebin-api")
-
-# In-memory store: topic → last received message dict
-topic_store: dict = {}
-topic_lock  = threading.Lock()
-
-
-def _extract_bin_id_from_topic(topic: str) -> str | None:
-    parts = topic.split("/")
-    if len(parts) >= 2 and parts[0] == "smartbin":
-        return parts[1]
-    return None
-
-
-def on_message(client, userdata, msg):
-    payload_str = msg.payload.decode("utf-8", errors="replace")
-    ts = utc_now_iso()                          
-
-    with topic_lock:
-        topic_store[msg.topic] = {
-            "topic":     msg.topic,
-            "payload":   payload_str,
-            "qos":       msg.qos,
-            "retain":    msg.retain,
-            "timestamp": ts,
-        }
-
-    bin_id = _extract_bin_id_from_topic(msg.topic)
-    with db_lock:
-        insert_mqtt_message(db_conn, msg.topic, payload_str,
-                            msg.qos, msg.retain, bin_id)
-
-    if "/events" in msg.topic:
-        try:
-            record = json.loads(payload_str)
-            with db_lock:
-                insert_pir_event(db_conn, record)
-        except Exception:
-            pass
 
 
 def on_connect(client, userdata, flags, reason_code, properties):
     if reason_code == 0:
-        print("[MQTT] Connected to broker successfully.")
-        client.subscribe("smartbin/#", qos=1)
-        print("[MQTT] Subscribed to smartbin/#")
+        logger.info("[MQTT] Connected to broker — publish-only mode.")
     else:
-        print(f"[MQTT] Connection failed with code {reason_code}")
+        logger.error("[MQTT] Connection failed rc=%s", reason_code)
 
 
 def on_disconnect(client, userdata, disconnect_flags, reason_code, properties):
     if reason_code != 0:
-        print(f"[MQTT] Unexpected disconnect (rc={reason_code}). Will auto-reconnect...")
+        logger.warning("[MQTT] Unexpected disconnect (rc=%s). Will auto-reconnect...", reason_code)
 
 
-mqtt_client.on_message    = on_message
 mqtt_client.on_connect    = on_connect
 mqtt_client.on_disconnect = on_disconnect
 
@@ -110,69 +63,10 @@ try:
     mqtt_client.reconnect_delay_set(min_delay=1, max_delay=30)
     mqtt_client.loop_start()
 except Exception as e:
-    print(f"[MQTT] Initial connection error: {e}")
-
-def _load_json_safe(path: str) -> dict:
-    if not os.path.exists(path):
-        return {}
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    logger.error("[MQTT] Initial connection error: %s", e)
 
 
-def _uri_to_short_id(uri: str) -> str:
-    return uri.split(":")[-1]
-
-
-def _bootstrap_registries():
-    wb  = _load_json_safe(os.path.join(MODELS_DIR, "wastebin.jsonld"))
-    s   = _load_json_safe(os.path.join(MODELS_DIR, "sensor.jsonld"))
-    env = _load_json_safe(os.path.join(MODELS_DIR, "environment.jsonld"))
-
-    env_name = env.get("name", env.get("@id", "Unknown"))
-
-    bin_nodes = wb.get("@graph", [wb]) if wb else []
-    for node in bin_nodes:
-        bin_uri = node.get("@id", "")
-        if not bin_uri:
-            continue
-        bin_id   = _uri_to_short_id(bin_uri)
-        raw_stat = node.get("pipeline:status", "active")
-        status   = raw_stat.get("@value", "active") if isinstance(raw_stat, dict) else raw_stat
-        with db_lock:
-            upsert_bin(db_conn, bin_id, bin_uri, node.get("name", ""), env_name, status)
-        logger.info("[BOOTSTRAP] Upserted bin: %s", bin_id)
-
-    sensor_nodes = s.get("@graph", [s]) if s else []
-    for node in sensor_nodes:
-        sensor_uri = node.get("@id", "")
-        if not sensor_uri:
-            continue
-        sensor_id   = _uri_to_short_id(sensor_uri)
-        mounted_uri = node.get("sosa:isHostedBy", "")
-        bin_id_s    = _uri_to_short_id(mounted_uri) if mounted_uri else None
-        raw_stat    = node.get("pipeline:status", "active")
-        status      = raw_stat.get("@value", "active") if isinstance(raw_stat, dict) else raw_stat
-
-        with db_lock:
-            upsert_sensor(db_conn, sensor_id, sensor_uri, "PIR",
-                          node.get("model", ""), status)
-            logger.info("[BOOTSTRAP] Upserted sensor: %s", sensor_id)
-
-            if bin_id_s:
-                exists = db_conn.execute(
-                    "SELECT 1 FROM Bins WHERE bin_id=?", (bin_id_s,)
-                ).fetchone()
-                if exists:
-                    upsert_mounted_on(db_conn, sensor_id, bin_id_s)
-                    logger.info("[BOOTSTRAP] Mounted %s → %s", sensor_id, bin_id_s)
-                else:
-                    logger.warning(
-                        "[BOOTSTRAP] Skipping mount — bin '%s' not found for sensor '%s'. "
-                        "Check wastebin.jsonld has an entry for this bin.",
-                        bin_id_s, sensor_id
-                    )
-_bootstrap_registries()
-
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _row_to_dict(row) -> dict:
     return dict(row) if row else {}
@@ -180,6 +74,7 @@ def _row_to_dict(row) -> dict:
 
 def _rows_to_list(rows) -> list:
     return [dict(r) for r in rows]
+
 
 
 api = Api(
@@ -255,29 +150,28 @@ emptied_input_model = api.model("EmptiedInput", {
 })
 
 topic_model = api.model("MQTTTopic", {
-    "topic":     fields.String(description="MQTT topic string"),
-    "payload":   fields.String(description="Last received payload (UTF-8)"),
-    "qos":       fields.Integer(description="QoS level of the last message"),
-    "retain":    fields.Boolean(description="Was the last message retained?"),
-    "timestamp": fields.String(description="ISO-8601 UTC time the message was received"),
+    "topic":     fields.String(),
+    "payload":   fields.String(),
+    "qos":       fields.Integer(),
+    "retain":    fields.Boolean(),
+    "timestamp": fields.String(),
 })
 
 topics_list_model = api.model("MQTTTopicList", {
-    "topic_count": fields.Integer(description="Number of distinct topics seen"),
+    "topic_count": fields.Integer(),
     "topics":      fields.List(fields.Nested(topic_model)),
 })
 
 subscribe_input_model = api.model("MQTTSubscribeInput", {
-    "topic": fields.String(required=True,
-                           description="Topic filter (wildcards # and + supported)"),
-    "qos":   fields.Integer(default=1, description="QoS level (0, 1 or 2)"),
+    "topic": fields.String(required=True),
+    "qos":   fields.Integer(default=1),
 })
 
 publish_model = api.model("MQTTPublish", {
-    "topic":   fields.String(required=True, description="MQTT topic to publish to"),
-    "payload": fields.String(required=True, description="Message payload"),
-    "qos":     fields.Integer(default=1, description="Quality of Service (0, 1 or 2)"),
-    "retain":  fields.Boolean(default=False, description="Retain this message on the broker"),
+    "topic":   fields.String(required=True),
+    "payload": fields.String(required=True),
+    "qos":     fields.Integer(default=1),
+    "retain":  fields.Boolean(default=False),
 })
 
 mqtt_msg_model = api.model("MQTTMessage", {
@@ -307,20 +201,14 @@ retrain_model = api.model("MLRetrain", {
 })
 
 
-
-
-
 limit_parser = reqparse.RequestParser()
 limit_parser.add_argument("limit", type=int, default=50, help="Max rows to return")
 
 day_parser = reqparse.RequestParser()
-day_parser.add_argument("day", type=int, default=0,
-                        help="Day of week: 0=Mon … 6=Sun")
+day_parser.add_argument("day", type=int, default=0, help="Day of week: 0=Mon … 6=Sun")
 
 mqtt_parser = reqparse.RequestParser()
-mqtt_parser.add_argument("limit", type=int, default=100,
-                         help="Max messages to return")
-
+mqtt_parser.add_argument("limit", type=int, default=100, help="Max messages to return")
 
 
 
@@ -330,9 +218,7 @@ class BinList(Resource):
     def get(self):
         """List all bins."""
         with db_lock:
-            rows = db_conn.execute(
-                "SELECT * FROM Bins ORDER BY bin_id"
-            ).fetchall()
+            rows = db_conn.execute("SELECT * FROM Bins ORDER BY bin_id").fetchall()
         return _rows_to_list(rows), 200
 
 
@@ -363,8 +249,7 @@ class BinEvents(Resource):
             ).fetchone():
                 api.abort(404, f"Bin '{bin_id}' not found")
             rows = db_conn.execute(
-                """SELECT * FROM PIR_Events WHERE bin_id=?
-                   ORDER BY event_time DESC LIMIT ?""",
+                "SELECT * FROM PIR_Events WHERE bin_id=? ORDER BY event_time DESC LIMIT ?",
                 (bin_id, args["limit"])
             ).fetchall()
         return _rows_to_list(rows), 200
@@ -380,9 +265,7 @@ class BinUsage(Resource):
                 "SELECT 1 FROM Bins WHERE bin_id=?", (bin_id,)
             ).fetchone():
                 api.abort(404, f"Bin '{bin_id}' not found")
-            rows = db_conn.execute(
-                QUERY_WEEKLY_HEATMAP, {"bin_id": bin_id}
-            ).fetchall()
+            rows = db_conn.execute(QUERY_WEEKLY_HEATMAP, {"bin_id": bin_id}).fetchall()
         return _rows_to_list(rows), 200
 
 
@@ -450,19 +333,18 @@ class BinEmpty(Resource):
         })
 
         result = mqtt_client.publish(cmd_topic, cmd_payload, qos=1)
-        print(f"[API] Publishing to {cmd_topic}: {cmd_payload} (rc={result.rc})")
         if result.rc != mqtt.MQTT_ERR_SUCCESS:
-            api.abort(503, f"Failed to publish MQTT command (rc={result.rc}). "
-                           "Is the broker reachable?")
+            api.abort(503, f"Failed to publish MQTT command (rc={result.rc})")
 
         with db_lock:
             insert_mqtt_message(db_conn, cmd_topic, cmd_payload, 1, False, bin_id)
 
-        status_payload = json.dumps({"state": "emptied", "emptied_at": emptied_at})
-        mqtt_client.publish(f"smartbin/{bin_id}/status",
-                            status_payload, qos=1, retain=True)
+        mqtt_client.publish(
+            f"smartbin/{bin_id}/status",
+            json.dumps({"state": "emptied", "emptied_at": emptied_at}),
+            qos=1, retain=True,
+        )
 
-        print(f"[EMPTY] Sent emptied command for bin {bin_id} at {emptied_at}")
         return {"bin_id": bin_id, "emptied_at": emptied_at, "emptied_by": emptied_by}, 200
 
 
@@ -480,7 +362,7 @@ class BinEmptiedHistory(Resource):
                 (bin_id, args["limit"])
             ).fetchall()
         return _rows_to_list(rows), 200
-    
+
 
 @ns.route("/<string:bin_id>/usage_data")
 class BinUsageCSV(Resource):
@@ -493,20 +375,15 @@ class BinUsageCSV(Resource):
                 "SELECT 1 FROM Bins WHERE bin_id=?", (bin_id,)
             ).fetchone():
                 api.abort(404, f"Bin '{bin_id}' not found")
-
-            rows = db_conn.execute(
-                QUERY_WEEKLY_HEATMAP, {"bin_id": bin_id}
-            ).fetchall()
+            rows = db_conn.execute(QUERY_WEEKLY_HEATMAP, {"bin_id": bin_id}).fetchall()
 
         usage_lookup: dict[tuple[int, int], int] = {
-            (r["day_of_week"], r["hour"]): r["usage_count"]
-            for r in rows
+            (r["day_of_week"], r["hour"]): r["usage_count"] for r in rows
         }
 
         output = io.StringIO()
         writer = csv.writer(output)
         writer.writerow(["day_of_week", "hour", "is_weekend", "event_count", "label"])
-
         for dow in range(7):
             is_weekend = 1 if dow in (5, 6) else 0
             for hour in range(24):
@@ -521,8 +398,10 @@ class BinUsageCSV(Resource):
             headers={
                 "Content-Disposition": f'attachment; filename="usage_data_{bin_id}.csv"',
                 "Content-Type": "text/csv; charset=utf-8",
-            }
+            },
         )
+
+
 
 @nsensor.route("/")
 class SensorList(Resource):
@@ -569,11 +448,11 @@ class SensorEvents(Resource):
             ).fetchone():
                 api.abort(404, f"Sensor '{sensor_id}' not found")
             rows = db_conn.execute(
-                """SELECT * FROM PIR_Events WHERE sensor_id=?
-                   ORDER BY event_time DESC LIMIT ?""",
+                "SELECT * FROM PIR_Events WHERE sensor_id=? ORDER BY event_time DESC LIMIT ?",
                 (sensor_id, args["limit"])
             ).fetchall()
         return _rows_to_list(rows), 200
+
 
 
 @nmqtt.route("/publish")
@@ -603,7 +482,6 @@ class MQTTPublish(Resource):
             "retain":  retain,
             "mqtt_rc": result.rc,
         }, 200
-
 
 
 @nmqtt.route("/messages")
@@ -643,6 +521,7 @@ class MQTTMessagesByBin(Resource):
             d["retained"] = bool(d.get("retained", 0))
             result.append(d)
         return result, 200
+
 
 
 @nsml.route("/retrain")
