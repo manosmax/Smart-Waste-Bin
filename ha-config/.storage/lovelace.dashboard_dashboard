@@ -1,0 +1,132 @@
+{
+  "version": 1,
+  "minor_version": 1,
+  "key": "lovelace.dashboard_dashboard",
+  "data": {
+    "config": {
+      "views": [
+        {
+          "type": "sections",
+          "sections": [
+            {
+              "type": "grid",
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Overview",
+                  "heading_style": "title"
+                },
+                {
+                  "type": "markdown",
+                  "content": "Status: Bin-01 {{ '🟢 Online' if states('binary_sensor.smart_waste_bin_bin_01_waste_bin_bin_01_motion') not in ['unavailable', 'unknown'] else '🔴 Offline' }}\n\nStatus: Bin-02 {{ '🟢 Online' if states('binary_sensor.smart_waste_bin_bin_02_waste_bin_bin_02_motion') not in ['unavailable', 'unknown'] else '🔴 Offline' }}\n\n\nAll bins: {{ '🟢 Online' if states('binary_sensor.smart_waste_bin_bin_01_waste_bin_bin_01_motion') not in ['unavailable', 'unknown'] and states('binary_sensor.smart_waste_bin_bin_02_waste_bin_bin_02_motion') not in ['unavailable', 'unknown']else '🔴 Offline' }}\n",
+                  "title": "Summary",
+                  "grid_options": {
+                    "rows": 5,
+                    "columns": 12
+                  }
+                },
+                {
+                  "type": "entities",
+                  "entities": [
+                    {
+                      "entity": "binary_sensor.smart_waste_bin_bin_01_waste_bin_bin_01_motion"
+                    }
+                  ],
+                  "grid_options": {
+                    "columns": 36,
+                    "rows": 1
+                  }
+                },
+                {
+                  "type": "entities",
+                  "entities": [
+                    {
+                      "entity": "binary_sensor.smart_waste_bin_bin_02_waste_bin_bin_02_motion"
+                    }
+                  ],
+                  "grid_options": {
+                    "columns": 36,
+                    "rows": 1
+                  }
+                },
+                {
+                  "type": "conditional",
+                  "conditions": [
+                    {
+                      "condition": "state",
+                      "entity": "sensor.smart_waste_bin_bin_01_waste_bin_bin_01_usage_level",
+                      "state": "high"
+                    }
+                  ],
+                  "card": {
+                    "graph": "line",
+                    "type": "sensor",
+                    "entity": "sensor.smart_waste_bin_bin_01_waste_bin_bin_01_usage_level",
+                    "detail": 1,
+                    "icon": "mdi:account-alert-outline"
+                  }
+                }
+              ],
+              "column_span": 4
+            },
+            {
+              "type": "grid",
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Bin-01 Overview",
+                  "heading_style": "title"
+                },
+                {
+                  "type": "gauge",
+                  "entity": "sensor.smart_waste_bin_bin_01_waste_bin_bin_01_fill_level"
+                },
+                {
+                  "type": "gauge",
+                  "entity": "counter.wastebin_motion_count"
+                },
+                {
+                  "type": "history-graph",
+                  "entities": [
+                    {
+                      "entity": "counter.wastebin_motion_count"
+                    }
+                  ]
+                },
+                {
+                  "type": "tile",
+                  "entity": "binary_sensor.rpi_power_status"
+                }
+              ],
+              "column_span": 4
+            },
+            {
+              "type": "grid",
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Bin-02 Overview",
+                  "heading_style": "title"
+                },
+                {
+                  "type": "gauge",
+                  "entity": "sensor.smart_waste_bin_bin_02_waste_bin_bin_02_fill_level"
+                }
+              ],
+              "column_span": 4
+            }
+          ],
+          "header": {
+            "card": {
+              "type": "markdown",
+              "content": "# Hello {{ user }}\n"
+            }
+          },
+          "max_columns": 4,
+          "title": "Main View",
+          "cards": []
+        }
+      ]
+    }
+  }
+}

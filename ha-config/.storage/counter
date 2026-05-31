@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "minor_version": 1,
+  "key": "counter",
+  "data": {
+    "items": [
+      {
+        "id": "wastebin_motion_count",
+        "name": "wastebin motion count ",
+        "icon": "mdi:motion-sensor",
+        "minimum": 0,
+        "initial": 0,
+        "step": 1,
+        "maximum": null,
+        "restore": false
+      }
+    ]
+  }
+}
