@@ -7,11 +7,10 @@ import joblib
 import os
 import sqlite3
 
-MIN_REAL_SAMPLES = 50   # minimum hourly slots before we trust real data
+MIN_REAL_SAMPLES = 50   
 BUSY_THRESHOLD = 10   
 
 
-# ── Synthetic data (cold-start fallback) ─────────────────────────────────────
 
 def generate_training_data(days=30, seed=42):
     rng = np.random.default_rng(seed)
@@ -79,13 +78,8 @@ def train_from_pseudo(output_dir="models_v_s"):
     return clf, report, len(df), model_path
 
 
-# ── Real-data path ────────────────────────────────────────────────────────────
 
 def load_real_data(db_path: str) -> pd.DataFrame:
-    """
-    Pull PIR_Events from the DB, group by (day_of_week, hour),
-    count events per slot, label top-third as 'busy'.
-    """
     conn = sqlite3.connect(db_path)
     df = pd.read_sql_query(
         """
@@ -101,8 +95,6 @@ def load_real_data(db_path: str) -> pd.DataFrame:
 
     if df.empty:
         return pd.DataFrame()
-
-    # Convert Sunday-first (0=Sun) → Monday-first (0=Mon)
     df["day_of_week"] = (df["dow_sun"] - 1) % 7
     df["is_weekend"]  = df["day_of_week"].isin([5, 6]).astype(int)
 
@@ -119,10 +111,6 @@ def load_real_data(db_path: str) -> pd.DataFrame:
     return agg
 
 def train_from_csv(csv_path: str, output_dir: str = "models_v_s"):
-    """Train from an uploaded CSV file (as produced by the dashboard or api.py export).
-    Returns (clf, report_str, n_samples, model_path).
-    Raises ValueError if the file has missing columns or too few rows.
-    """
     os.makedirs(output_dir, exist_ok=True)
 
     df = pd.read_csv(csv_path)
@@ -142,7 +130,6 @@ def train_from_csv(csv_path: str, output_dir: str = "models_v_s"):
     if bad_labels:
         raise ValueError(f"Unexpected label values in CSV: {bad_labels}")
 
-    # Align label with shared threshold — re-derive from event_count to be safe
     df["label"] = df["event_count"].apply(
         lambda x: "busy" if x >= BUSY_THRESHOLD else "quiet"
     )
@@ -168,7 +155,6 @@ def train_from_csv(csv_path: str, output_dir: str = "models_v_s"):
 
 
 def train_from_db(db_path: str, output_dir: str = "models_v_s"):
-    """Train from real database data. Returns (clf, report_str, n_samples, model_path)."""
     os.makedirs(output_dir, exist_ok=True)
 
     df = load_real_data(db_path)
@@ -201,12 +187,9 @@ def train_from_db(db_path: str, output_dir: str = "models_v_s"):
     return clf, report, len(df), model_path
 
 
-# ── CLI entry point ───────────────────────────────────────────────────────────
 
 def train_and_save(output_dir="models_v_s", db_path="smartbin.db"):
-    """
-    Try real DB data first; fall back to pseudo if not enough rows.
-    """
+    
     if os.path.exists(db_path):
         try:
             return train_from_db(db_path, output_dir)

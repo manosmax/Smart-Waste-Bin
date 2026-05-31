@@ -15,7 +15,6 @@ from pirlib import PirInterpreter, PirSampler
 logger = logging.getLogger(__name__)
 
 
-# State persistence
 
 
 STATE_FILE = "/app/data/sensor_state.json"
@@ -103,11 +102,9 @@ def parse_args() -> argparse.Namespace:
 
 
 
-# Home Assistant MQTT Discovery
 
 
 def send_discovery(client, bin_id: str, sensor_id: str, pir_topic: str, fill_topic: str) -> None:
-    """Publish retained HA MQTT Discovery payloads."""
     device_info = {
         "identifiers": [bin_id],
         "name": f"Smart Waste Bin {bin_id}",
@@ -148,7 +145,6 @@ def send_discovery(client, bin_id: str, sensor_id: str, pir_topic: str, fill_top
 
 
 
-# Producer thread — reads GPIO, enqueues event dicts
 
 
 def producer_loop(
@@ -200,9 +196,6 @@ def producer_loop(
 
         time.sleep(args.sample_interval)
 
-
-
-# Publisher thread — drains queue, sends to MQTT, handles commands
 
 
 def publisher_loop(
@@ -290,8 +283,6 @@ def publisher_loop(
     client.disconnect()
 
 
-
-# Entry point
 
 
 def main() -> None:

@@ -1,33 +1,3 @@
-"""
-api.py — Smart Wastebin REST API (Flask-RESTX / Swagger)
-=========================================================
-All data served from SQLite (smartbin.db) via database.py.
-
-/bins/                          GET  — list all bins
-/bins/<bin_id>                  GET  — bin detail
-/bins/<bin_id>/events           GET  — PIR events (paginated)
-/bins/<bin_id>/usage            GET  — full weekly usage heatmap
-/bins/<bin_id>/usage/peak       GET  — peak hour for a given day
-/bins/<bin_id>/usage/least      GET  — least-active hour for a given day
-/bins/<bin_id>/empty            POST — mark bin as emptied (MQTT + DB)
-/bins/<bin_id>/emptied-history  GET  — emptied log
-
-/sensors/                       GET  — list all sensors
-/sensors/<sensor_id>            GET  — sensor detail
-/sensors/<sensor_id>/events     GET  — PIR events for one sensor
-
-/mqtt/publish                   POST — publish a raw MQTT message
-/mqtt/subscribe                 POST — subscribe to an extra topic at runtime
-/mqtt/topics                    GET  — live in-memory snapshot (last msg per topic)
-/mqtt/topics/<path:topic>       GET  — last in-memory message for a specific topic
-/mqtt/topics/<path:topic>       DELETE — remove topic from in-memory store
-/mqtt/messages                  GET  — ALL stored MQTT messages from DB (paginated)
-/mqtt/messages/<bin_id>         GET  — stored MQTT messages filtered by bin
-
-/ml/retrain                     POST — retrain model from real DB data
-/ml/predict                     GET  — predict busy/quiet for the next hour
-"""
-
 import json
 import logging
 import os
@@ -57,12 +27,10 @@ from database import (
     QUERY_WEEKLY_HEATMAP,
 )
 
-# ── utc_now_iso — MUST be defined before MQTT callbacks are registered ────────
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
-# ── App & DB setup ────────────────────────────────────────────────────────────
 
 app = Flask(__name__)
 
@@ -77,7 +45,6 @@ init_db(DB_PATH)
 db_conn = get_connection(DB_PATH)
 db_lock = threading.Lock()
 
-# ── MQTT ──────────────────────────────────────────────────────────────────────
 
 mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, "wastebin-api")
 
@@ -87,7 +54,6 @@ topic_lock  = threading.Lock()
 
 
 def _extract_bin_id_from_topic(topic: str) -> str | None:
-    """smartbin/<bin_id>/... → <bin_id>, or None."""
     parts = topic.split("/")
     if len(parts) >= 2 and parts[0] == "smartbin":
         return parts[1]
@@ -96,9 +62,8 @@ def _extract_bin_id_from_topic(topic: str) -> str | None:
 
 def on_message(client, userdata, msg):
     payload_str = msg.payload.decode("utf-8", errors="replace")
-    ts = utc_now_iso()                          # safe — defined above
+    ts = utc_now_iso()                          
 
-    # 1. Update in-memory snapshot (last message per topic)
     with topic_lock:
         topic_store[msg.topic] = {
             "topic":     msg.topic,
@@ -108,13 +73,11 @@ def on_message(client, userdata, msg):
             "timestamp": ts,
         }
 
-    # 2. Persist to MQTT_Messages table for crash-recovery / debug
     bin_id = _extract_bin_id_from_topic(msg.topic)
     with db_lock:
         insert_mqtt_message(db_conn, msg.topic, payload_str,
                             msg.qos, msg.retain, bin_id)
 
-    # 3. If it's a sensor-event topic, also persist to PIR_Events + Bin_Usage
     if "/events" in msg.topic:
         try:
             record = json.loads(payload_str)
@@ -148,8 +111,6 @@ try:
     mqtt_client.loop_start()
 except Exception as e:
     print(f"[MQTT] Initial connection error: {e}")
-
-# ── Bootstrap JSON-LD model files → DB ───────────────────────────────────────
 
 def _load_json_safe(path: str) -> dict:
     if not os.path.exists(path):
@@ -198,7 +159,6 @@ def _bootstrap_registries():
             logger.info("[BOOTSTRAP] Upserted sensor: %s", sensor_id)
 
             if bin_id_s:
-                # Verify the bin actually exists before linking
                 exists = db_conn.execute(
                     "SELECT 1 FROM Bins WHERE bin_id=?", (bin_id_s,)
                 ).fetchone()
@@ -213,7 +173,6 @@ def _bootstrap_registries():
                     )
 _bootstrap_registries()
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _row_to_dict(row) -> dict:
     return dict(row) if row else {}
@@ -222,7 +181,6 @@ def _row_to_dict(row) -> dict:
 def _rows_to_list(rows) -> list:
     return [dict(r) for r in rows]
 
-# ── Flask-RESTX / Swagger ────────────────────────────────────────────────────
 
 api = Api(
     app,
@@ -236,7 +194,6 @@ nsensor = api.namespace("sensors", description="Sensor operations")
 nmqtt   = api.namespace("mqtt",    description="MQTT operations")
 nsml    = api.namespace("ml",      description="Machine-learning operations")
 
-# ── Swagger models ────────────────────────────────────────────────────────────
 
 bin_model = api.model("Bin", {
     "bin_id":     fields.String(required=True),
@@ -352,7 +309,6 @@ retrain_model = api.model("MLRetrain", {
 
 
 
-# ── Parsers ───────────────────────────────────────────────────────────────────
 
 limit_parser = reqparse.RequestParser()
 limit_parser.add_argument("limit", type=int, default=50, help="Max rows to return")
@@ -367,7 +323,6 @@ mqtt_parser.add_argument("limit", type=int, default=100,
 
 
 
-# ── /bins ────────────────────────────────────────────────────────────────────
 
 @ns.route("/")
 class BinList(Resource):
@@ -386,7 +341,6 @@ class BinDetail(Resource):
     @ns.marshal_with(bin_model)
     @ns.response(404, "Bin not found")
     def get(self, bin_id):
-        """Get details for a specific bin."""
         with db_lock:
             row = db_conn.execute(
                 "SELECT * FROM Bins WHERE bin_id=?", (bin_id,)
@@ -402,7 +356,6 @@ class BinEvents(Resource):
     @ns.marshal_list_with(event_model)
     @ns.response(404, "Bin not found")
     def get(self, bin_id):
-        """Get PIR motion events for a bin (newest first)."""
         args = limit_parser.parse_args()
         with db_lock:
             if not db_conn.execute(
@@ -422,7 +375,6 @@ class BinUsage(Resource):
     @ns.marshal_list_with(usage_model)
     @ns.response(404, "Bin not found")
     def get(self, bin_id):
-        """Full weekly usage heatmap for a bin (7 days × 24 hours)."""
         with db_lock:
             if not db_conn.execute(
                 "SELECT 1 FROM Bins WHERE bin_id=?", (bin_id,)
@@ -440,7 +392,6 @@ class BinPeakHour(Resource):
     @ns.marshal_with(peak_model)
     @ns.response(404, "No usage data found")
     def get(self, bin_id):
-        """Peak usage hour for a bin on a specific day (0=Mon … 6=Sun)."""
         args = day_parser.parse_args()
         dow  = args["day"]
         with db_lock:
@@ -481,7 +432,6 @@ class BinEmpty(Resource):
     @ns.response(404, "Bin not found")
     @ns.response(503, "MQTT publish failed")
     def post(self, bin_id):
-        """Mark a bin as emptied — publishes MQTT command and stores record."""
         with db_lock:
             if not db_conn.execute(
                 "SELECT 1 FROM Bins WHERE bin_id=?", (bin_id,)
@@ -520,7 +470,6 @@ class BinEmpty(Resource):
 class BinEmptiedHistory(Resource):
     @ns.expect(limit_parser)
     def get(self, bin_id):
-        """Get emptied-command history for a bin from MQTT_Messages."""
         args = limit_parser.parse_args()
         with db_lock:
             rows = db_conn.execute(
@@ -539,13 +488,6 @@ class BinUsageCSV(Resource):
     @ns.response(200, "CSV file download")
     @ns.response(404, "Bin not found")
     def get(self, bin_id):
-        """Export full weekly usage heatmap as a CSV file for ML training.
-
-        Returns a 168-row CSV (7 days × 24 hours) with columns:
-        day_of_week, hour, is_weekend, event_count, label.
-        Rows with no recorded usage are included with event_count=0.
-        label is 'busy' if event_count >= BUSY_THRESHOLD, else 'quiet'.
-        """
         with db_lock:
             if not db_conn.execute(
                 "SELECT 1 FROM Bins WHERE bin_id=?", (bin_id,)
@@ -581,7 +523,6 @@ class BinUsageCSV(Resource):
                 "Content-Type": "text/csv; charset=utf-8",
             }
         )
-# ── /sensors ──────────────────────────────────────────────────────────────────
 
 @nsensor.route("/")
 class SensorList(Resource):
@@ -603,7 +544,6 @@ class SensorDetail(Resource):
     @nsensor.marshal_with(sensor_model)
     @nsensor.response(404, "Sensor not found")
     def get(self, sensor_id):
-        """Get details for a specific sensor."""
         with db_lock:
             row = db_conn.execute("""
                 SELECT s.*, m.bin_id
@@ -622,7 +562,6 @@ class SensorEvents(Resource):
     @nsensor.marshal_list_with(event_model)
     @nsensor.response(404, "Sensor not found")
     def get(self, sensor_id):
-        """Get recent PIR events for a specific sensor (newest first)."""
         args = limit_parser.parse_args()
         with db_lock:
             if not db_conn.execute(
@@ -636,7 +575,6 @@ class SensorEvents(Resource):
             ).fetchall()
         return _rows_to_list(rows), 200
 
-# ── /mqtt ─────────────────────────────────────────────────────────────────────
 
 @nmqtt.route("/publish")
 class MQTTPublish(Resource):
@@ -673,8 +611,6 @@ class MQTTMessageList(Resource):
     @nmqtt.expect(mqtt_parser)
     @nmqtt.marshal_list_with(mqtt_msg_model)
     def get(self):
-        """All stored MQTT messages from the database, newest first.
-        Persisted across restarts — use for crash/shutdown debugging."""
         args = mqtt_parser.parse_args()
         with db_lock:
             rows = db_conn.execute(
@@ -694,7 +630,6 @@ class MQTTMessagesByBin(Resource):
     @nmqtt.expect(mqtt_parser)
     @nmqtt.marshal_list_with(mqtt_msg_model)
     def get(self, bin_id):
-        """All stored MQTT messages for a specific bin, newest first."""
         args = mqtt_parser.parse_args()
         with db_lock:
             rows = db_conn.execute(
@@ -709,14 +644,11 @@ class MQTTMessagesByBin(Resource):
             result.append(d)
         return result, 200
 
-# ── /ml ───────────────────────────────────────────────────────────────────────
 
 @nsml.route("/retrain")
 class MLRetrain(Resource):
     @nsml.marshal_with(retrain_model)
     def post(self):
-        """Retrain the busy/quiet predictor from real PIR_Events in the database.
-        Falls back to synthetic data automatically if fewer than 50 real samples exist."""
         try:
             from train_model import train_from_db
             clf, report, n_samples, model_path = train_from_db(DB_PATH, ML_DIR)
@@ -743,8 +675,6 @@ class MLRetrain(Resource):
 class MLPredict(Resource):
     @nsml.marshal_with(predict_model)
     def get(self):
-        """Predict busy/quiet for the next hour using the trained model.
-        Returns 503 if the model has not been trained yet."""
         import joblib
         import pandas as pd
 
@@ -773,7 +703,6 @@ class MLPredict(Resource):
             "timestamp":      utc_now_iso(),
         }, 200
 
-# ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     app.run(debug=False, host="0.0.0.0", port=5000)

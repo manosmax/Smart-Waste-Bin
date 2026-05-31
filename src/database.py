@@ -1,16 +1,3 @@
-"""
-database.py — SQLite schema initialisation for the Smart Waste Bin project.
-
-Tables
-------
-Bins            — one row per physical bin (expandable)
-Sensors         — one row per sensor (expandable)
-Mounted_On      — M:M relationship: which sensor lives in which bin
-PIR_Events      — every motion observation from every PIR sensor
-Bin_Usage       — hourly usage counts, keyed by (bin_id, day_of_week, hour)
-MQTT_Messages   — raw MQTT payloads for crash/debug recovery
-"""
-
 import sqlite3
 import os
 from datetime import datetime, timezone
@@ -30,7 +17,6 @@ def init_db(db_path: str = DB_PATH) -> None:
     conn = get_connection(db_path)
     c = conn.cursor()
 
-    # ------------------------------------------------------------------ Bins
     c.execute("""
         CREATE TABLE IF NOT EXISTS Bins (
             bin_id      TEXT PRIMARY KEY,          -- e.g. "bin-01"
@@ -42,7 +28,6 @@ def init_db(db_path: str = DB_PATH) -> None:
         )
     """)
 
-    # --------------------------------------------------------------- Sensors
     c.execute("""
         CREATE TABLE IF NOT EXISTS Sensors (
             sensor_id   TEXT PRIMARY KEY,          -- e.g. "pir-01"
@@ -54,8 +39,6 @@ def init_db(db_path: str = DB_PATH) -> None:
         )
     """)
 
-    # ------------------------------------------------------------ Mounted_On
-    # Defines which sensor is mounted in which bin (many sensors per bin allowed)
     c.execute("""
         CREATE TABLE IF NOT EXISTS Mounted_On (
             sensor_id   TEXT NOT NULL REFERENCES Sensors(sensor_id) ON DELETE CASCADE,
@@ -65,8 +48,6 @@ def init_db(db_path: str = DB_PATH) -> None:
         )
     """)
 
-    # ---------------------------------------------------------- PIR_Events
-    # Every motion observation.  Maps back to JSON-LD fields from producer.py.
     c.execute("""
         CREATE TABLE IF NOT EXISTS PIR_Events (
             id                  INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -87,10 +68,6 @@ def init_db(db_path: str = DB_PATH) -> None:
     c.execute("CREATE INDEX IF NOT EXISTS idx_pir_bin_time  ON PIR_Events(bin_id, event_time)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_pir_sensor    ON PIR_Events(sensor_id)")
 
-    # ----------------------------------------------------------- Bin_Usage
-    # Hourly usage aggregates — one row per (bin_id, day_of_week, hour).
-    # day_of_week: 0=Monday … 6=Sunday  (matches Python weekday())
-    # usage_count is incremented by the consumer / API on every new PIR event.
     c.execute("""
         CREATE TABLE IF NOT EXISTS Bin_Usage (
             bin_id      TEXT NOT NULL REFERENCES Bins(bin_id) ON DELETE CASCADE,
@@ -102,8 +79,6 @@ def init_db(db_path: str = DB_PATH) -> None:
     """)
     c.execute("CREATE INDEX IF NOT EXISTS idx_usage_bin ON Bin_Usage(bin_id)")
 
-    # --------------------------------------------------------- MQTT_Messages
-    # Raw broker payloads — used for post-crash debugging.
     c.execute("""
         CREATE TABLE IF NOT EXISTS MQTT_Messages (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -123,7 +98,6 @@ def init_db(db_path: str = DB_PATH) -> None:
     print(f"[DB] Schema initialised at '{db_path}'")
 
 
-# ── Convenience helpers used by api.py ──────────────────────────────────────
 
 def upsert_bin(conn: sqlite3.Connection, bin_id: str, bin_uri: str,
                name: str = "", location: str = "", status: str = "active") -> None:
@@ -175,7 +149,6 @@ def insert_pir_event(conn: sqlite3.Connection, record: dict) -> None:
     dow  = et.weekday()    # 0=Mon … 6=Sun
     hour = et.hour
 
-    # Resolve short IDs
     raw_sensor_uri = record.get("device_id", "")
     raw_bin_uri    = record.get("mounted_on", "")
     sensor_id = raw_sensor_uri.split(":")[-1]
@@ -202,7 +175,6 @@ def insert_pir_event(conn: sqlite3.Connection, record: dict) -> None:
         record.get("pipeline_latency_ms"),
     ))
 
-    # Upsert usage counter
     conn.execute("""
         INSERT INTO Bin_Usage (bin_id, day_of_week, hour, usage_count)
         VALUES (?,?,?,1)
@@ -223,7 +195,6 @@ def insert_mqtt_message(conn: sqlite3.Connection, topic: str, payload: str,
     conn.commit()
 
 
-# ── Useful analytical queries (for reference / direct use) ──────────────────
 
 QUERY_PEAK_HOUR = """
 -- Peak usage hour for a given bin on a given day-of-week

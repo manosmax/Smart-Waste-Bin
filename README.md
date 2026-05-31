@@ -1,34 +1,33 @@
 # Smart Wastebin System
 
 > An IoT edge-computing pipeline that monitors bin occupancy via a PIR motion sensor,
-> publishes structured events over MQTT, stores them in SQLite, classifies usage intensity
-> with rule-based and ML virtual sensors, exposes a REST API with Swagger UI and AsyncApi,
->  utilizes Node-RED for low code integration
-> as well as Cloudflare Tunnel for easy acess and surfaces
-> all entities in Home Assistant — all in a single `docker compose up --build`.
+> publishes structured JSON-LD events over MQTT, stores them in SQLite, classifies usage
+> intensity with rule-based and ML virtual sensors, exposes a REST API with Swagger UI
+> and AsyncAPI docs, utilises Node-RED for low-code integration, and surfaces all entities
+> in Home Assistant — all launched with a single `docker compose up --build`.
 
-**Team 08** · Advanced Programming Techniques ECE Upatras · 2026
+**Team 08** · Advanced Programming Techniques · ECE Upatras · 2026
 
 ---
 
 ## Table of Contents
 
-1. [Architecture overview](#1-architecture-overview)
-2. [Hardware & wiring](#2-hardware--wiring)
+1. [Architecture Overview](#1-architecture-overview)
+2. [Hardware & Wiring](#2-hardware--wiring)
 3. [Prerequisites](#3-prerequisites)
-4. [Quick start](#4-quick-start)
-5. [Directory structure](#5-directory-structure)
-6. [Services reference](#6-services-reference)
-7. [MQTT topic structure](#7-mqtt-topic-structure)
-8. [REST API endpoints](#8-rest-api-endpoints)
-9. [SQLite database](#9-sqlite-database)
-10. [Node-RED flows](#10-node-red-flows)
-11. [Virtual sensors](#11-virtual-sensors)
-12. [Home Assistant integration](#12-home-assistant-integration)
-13. [Training data upload & retraining](#13-training-data-upload--retraining)
-14. [Cloudflare tunnel (remote access)](#14-cloudflare-tunnel-remote-access)
-15. [Configuration reference](#15-configuration-reference)
-16. [Extending the system](#16-extending-the-system)
+4. [Quick Start](#4-quick-start)
+5. [Directory Structure](#5-directory-structure)
+6. [Services Reference](#6-services-reference)
+7. [MQTT Topic Structure](#7-mqtt-topic-structure)
+8. [REST API Endpoints](#8-rest-api-endpoints)
+9. [SQLite Database](#9-sqlite-database)
+10. [Node-RED Flows](#10-node-red-flows)
+11. [Virtual Sensors](#11-virtual-sensors)
+12. [Home Assistant Integration](#12-home-assistant-integration)
+13. [Training Data Upload & Retraining](#13-training-data-upload--retraining)
+14. [Cloudflare Tunnel (Remote Access)](#14-cloudflare-tunnel-remote-access)
+15. [Configuration Reference](#15-configuration-reference)
+16. [Extending the System (Multi-Bin)](#16-extending-the-system-multi-bin)
 17. [Troubleshooting](#17-troubleshooting)
 
 ---
@@ -37,32 +36,41 @@
 
 ```
 HC-SR501 PIR sensor
-       │ GPIO BCM-17
+       │ GPIO BCM-17 (configurable via --pin)
        ▼
-  producer.py ──────────────────► Mosquitto MQTT :1883
-       │                                │
-  sensor_state.json                     ├──► consumer.py ──► motion_events.jsonl
-  (persisted fill level)                │
-                                        ├──► virtual_sensor_rules.py  (CEP deque)
-                                        │
-                                        ├──► virtual_sensor_ml.py     (Random Forest)
-                                        │
-                                        ├──► Node-RED :1880
-                                        │         ├── alert flows
-                                        │         └── SQLite writer ──► smartbin.db
-                                        │
-                                        └──► api.py :5000 (Swagger UI)
-                                                   ├── /bins/{id}/events
-                                                   ├── /bins/{id}/peak-hour
-                                                   ├── /bins/{id}/hourly-activity
-                                                   └── /mqtt/...
-                                                         │
-                                               Home Assistant :8123
-                                                         │
-                                               Cloudflare Tunnel
-                                               ha / api / upload / asyncapi
-                                               .yourdomain.com
+  producer.py ─────────────────────► Mosquitto MQTT broker :1883
+       │                                        │
+  sensor_state.json                             ├──► consumer.py ──► motion_events.jsonl
+  (persists fill level across reboots)          │
+                                                ├──► virtual_sensor_rules.py  (CEP deque)
+                                                │
+                                                ├──► virtual_sensor_ml.py     (Random Forest)
+                                                │
+                                                ├──► Node-RED :1880
+                                                │         ├── alert flows
+                                                │         └── SQLite writer ──► smartbin.db
+                                                │
+                                                └──► api.py :5000 (Swagger UI)
+                                                           ├── /bins/{id}/events
+                                                           ├── /bins/{id}/usage
+                                                           ├── /bins/{id}/usage/peak
+                                                           ├── /bins/{id}/usage/least
+                                                           ├── /bins/{id}/empty
+                                                           ├── /sensors/...
+                                                           ├── /mqtt/...
+                                                           └── /ml/retrain  /ml/predict
+                                                                     │
+                                                           Home Assistant :8123
+                                                                     │
+                                                           Cloudflare Tunnel
+                                                           ha / api / upload / asyncapi
+                                                           .yourdomain.com
 ```
+
+Data flows from the physical sensor through MQTT into both persistent storage (SQLite via
+Node-RED and the API) and real-time analytics (virtual sensors). The REST API serves all
+stored data with a Swagger UI and can also publish commands back to MQTT (e.g. mark a bin
+as emptied). Home Assistant auto-discovers all entities via MQTT Discovery.
 
 ---
 
@@ -70,54 +78,42 @@ HC-SR501 PIR sensor
 
 ### Components
 
-| Component | Quantity | Notes |
+| Component | Qty | Notes |
 |---|---|---|
-| Raspberry Pi 4 (or 3B+) | 1 | Any model with 40-pin GPIO header |
-| HC-SR501 PIR Motion Sensor | 1 | 3–20 V supply, 3.3 V output — Pi-compatible |
-| Female-to-female jumper wires | 3 | |
-| Waste bin (~18 cm height) | 1 | Sensor mounts at the back of the bin's body |
+| Raspberry Pi 5  | 1 | Any model with 40-pin GPIO header |
+| HC-SR501 PIR Motion Sensor | 1 | 5 V supply, 3.3 V output — Pi-compatible |
+| Female-to-female jumper wires | 3 | VCC · GND · OUT |
+| Waste bin (~18 cm height) | 1 | Sensor mounts on the inside back wall |
 
 ### GPIO Wiring
 
 ```
-HC-SR501 Pin          Raspberry Pi Pin (BCM)    Raspberry Pi Header Pin
-─────────────────────────────────────────────────────────────────────────
-VCC  (power)    ──►   5 V                        Pin 2
-GND  (ground)   ──►   GND                        Pin 6
-OUT  (signal)   ──►   GPIO 17 (BCM)              Pin 11
-```
-
-#### Raspberry Pi GPIO header reference (relevant pins)
-
-```
-         3.3V  [1]  [2]  5V       ← use pin 2 for HC-SR501 VCC
-          SDA  [3]  [4]  5V
-          SCL  [5]  [6]  GND      ← use pin 6 for HC-SR501 GND
-     GPIO  4   [7]  [8]  TX
-          GND  [9] [10]  RX
-★   GPIO 17  [11] [12]  GPIO 18  ← use pin 11 for HC-SR501 OUT
-    GPIO 27  [13] [14]  GND
-    ...
+HC-SR501 Pin        Raspberry Pi (BCM)     Raspberry Pi Header Pin
+──────────────────────────────────────────────────────────────────
+VCC (power)   ──►   5 V                    Pin 2
+GND (ground)  ──►   GND                    Pin 6
+OUT (signal)  ──►   GPIO 17 (default)      Pin 11
 ```
 
 
-### Physical mounting (cross-section view)
+
+### Physical Mounting
+
+Mount the sensor on the **inner back wall** of the bin, lens facing the opening:
 
 ```
-        ─ ─ ─ ─ ─ ─ ─ ─ ─ ─  ← bin lid
-        ┌──────────────────┐
-        │   HC-SR501 dome  │  ← mounted on the back
-        └────────┬─────────┘
-                 
-        
+          ─ ─ ─ ─ ─ ─ ─ ─ ─ ─  ← bin lid
+        |┌──────────────────┐|
+        |│  HC-SR501 dome   │| ← screwd to the back wall
+        |└────────┬─────────┘|
+        |         │          |
         │                    │
-        │       BIN          │  
-        │    interior        │
+        │        BIN         │
+        │      interior      │
         │                    │
         └────────────────────┘
 ```
 
----
 
 ## 3. Prerequisites
 
@@ -125,25 +121,36 @@ OUT  (signal)   ──►   GPIO 17 (BCM)              Pin 11
 
 | Requirement | Version | Check |
 |---|---|---|
-| OS | Raspberry Pi OS Lite (Bookworm 64-bit) | `uname -a` |
+| OS | Raspberry Pi OS Lite (Bookworm 64-bit) recommended | `uname -a` |
 | Docker Engine | ≥ 24 | `docker --version` |
 | Docker Compose plugin | ≥ 2.20 | `docker compose version` |
 | Git | any | `git --version` |
-| Node.js (for AsyncAPI CLI, optional) | ≥ 18 | `node --version` |
 
-#### Install Docker on Raspberry Pi (if not installed)
+#### Install Docker on Raspberry Pi
 
 ```bash
 curl -fsSL https://get.docker.com | sh
 sudo usermod -aG docker $USER
-# Log out and back in
+newgrp docker              # apply group change without logout
+docker run hello-world     # verify
 ```
 
-### For remote access (optional)
+#### Enable GPIO access (required for real hardware)
 
-- A Cloudflare account (free)
-- A domain registered on or transferred to Cloudflare (~$10/year)
-- `cloudflared` CLI installed (see [Section 14](#14-cloudflare-tunnel-remote-access))
+The `producer` container needs access to `/dev/gpiochip0`. Verify it exists:
+
+```bash
+ls /dev/gpiochip*
+```
+
+The `docker-compose.yml` passes the device through automatically. If you see a
+`lgpio` error on a non-Pi machine, see [Troubleshooting](#17-troubleshooting).
+
+### For Remote Access through port forwarding
+
+- A Cloudflare account (free tier is sufficient)
+- A domain registered with or transferred to Cloudflare (~$10/year)
+- `cloudflared` CLI installed on the Pi (see [Section 14](#14-cloudflare-tunnel-remote-access))
 
 ---
 
@@ -152,26 +159,25 @@ sudo usermod -aG docker $USER
 ```bash
 # 1. Clone the repository
 git clone https://github.com/manos-max/Smart-Waste-Bin.git
-cd smartbin
+cd Smart-Waste-Bin
 
-# 2. (Raspberry Pi only) Ensure GPIO device exists
+# 2. (Raspberry Pi only) Confirm GPIO device is accessible
 ls /dev/gpiochip0
 
-# 3. Generate AsyncAPI static docs (optional, requires Node.js)
-npm install -g @asyncapi/cli
-asyncapi generate fromTemplate asyncapi.yml @asyncapi/html-template \
-  --output asyncapi-docs
-
-# 4. Start everything
+# 3. Build and start all services
 docker compose up --build
-
-# Services come up at:
-#   Swagger UI          →  http://localhost:5000
-#   Upload & charts     →  http://localhost:5001
-#   AsyncAPI docs       →  http://localhost:5002
-#   Node-RED editor     →  http://localhost:1880
-#   MQTT broker         →  localhost:1883
 ```
+
+Once the stack is running, services are reachable at:
+
+| Service | URL |
+|---|---|
+| Swagger UI (REST API) | http://localhost:5000 |
+| Upload & retraining UI | http://localhost:5001 |
+| AsyncAPI docs | http://localhost:5002 |
+| Node-RED editor | http://localhost:1880 |
+| MQTT broker | localhost:1883 |
+| Home Assistant | http://localhost:8123 |
 
 
 ---
@@ -179,110 +185,99 @@ docker compose up --build
 ## 5. Directory Structure
 
 ```
-smartbin/
+Smart-Waste-Bin/
 ├── README.md
 ├── requirements.txt
 ├── asyncapi.yml                  ← AsyncAPI 3.0 MQTT interface spec
 ├── Dockerfile
 ├── docker-compose.yml
-├── mosquitto.conf
-├── train_model.py                ← train/retrain ML model (run at build time)
-├── virtual_sensor_ml.py
-├── virtual_sensor_rules.py
+├── mosquitto.conf                ← Mosquitto broker config
+├── train_model.py                ← ML training script (run at build time)
+├── virtual_sensor_ml.py          ← ML virtual sensor service
+├── virtual_sensor_rules.py       ← Rule-based virtual sensor service
 │
-├── src/                          ← Python application code
-│   ├── api.py                    ← Flask-RESTx REST API
+├── src/                          ← Python application source
+│   ├── api.py                    ← Flask-RESTX REST API (Swagger UI)
 │   ├── consumer.py               ← MQTT subscriber + JSONL writer
 │   ├── producer.py               ← GPIO reader + MQTT publisher
-│   ├── upload.py                 ← CSV upload + seaborn visualisation
-│   ├── serve_yaml.py             ← AsyncAPI YAML static server
+│   ├── upload.py                 ← CSV upload + Seaborn visualisation
+│   ├── serve_yaml.py             ← Static AsyncAPI YAML server
 │   └── pirlib/
 │       ├── __init__.py
-│       ├── interpreter.py        ← debounce + cooldown logic
+│       ├── interpreter.py        ← Debounce + cooldown logic
 │       └── sampler.py            ← lgpio GPIO abstraction
 │
 ├── models/                       ← JSON-LD semantic model files
 │   ├── context.jsonld
-│   ├── wastebin.jsonld
-│   ├── sensor.jsonld
-│   └── environment.jsonld
+│   ├── wastebin.jsonld           ← Bin identity + metadata
+│   ├── sensor.jsonld             ← Sensor identity + metadata
+│   └── environment.jsonld        ← Deployment environment context
 │
-├── models_v_s/                   ← trained ML artefacts (generated at build)
+├── models_v_s/                   ← Trained ML artefacts (generated at build)
 │   └── busy_predictor.joblib
 │
-├── node-red/                     ← Node-RED configuration (version-controlled)
-│   ├── flows.json                ← ALL flows — import/export via UI or CLI
-│   └── settings.js               ← Node-RED settings (port, logging, etc.)
+├── node-red/                     ← Node-RED config (version-controlled)
+│   ├── flows.json                ← All flows — import/export via UI
+│   └── settings.js               ← Node-RED settings (port, logging)
 │
 ├── db/
-│   └── schema.sql                ← SQLite schema — run once on first boot
+│   └── schema.sql                ← Reference SQLite schema
 │
 ├── docs/
-│   └── Ontology                  ← ontology documentation
+│   └── Ontology/                 ← Ontology documentation
 │
-├── asyncapi-docs/                ← generated static HTML (gitignored)
+├── asyncapi-docs/                ← Generated static HTML (gitignored)
 │
-└── data/                         ← runtime data (gitignored)
+│
+├── ha-config/
+│   ├── configuration.yaml      ← ha_configuration.yaml (rename on copy)
+│   └── packages/
+│       ├── smartbin_mqtt.yaml           ← ha_smartbin_mqtt.yaml
+│       └── smartbin_automations.yaml    ← ha_smartbin_automations.yaml
+│
+└── data/                         ← Runtime data (gitignored)
     ├── motion_events.jsonl
     ├── emptied_records.jsonl
-    ├── sensor_state.json
+    ├── sensor_state.json         ← Persisted fill level (survives restarts)
     ├── smartbin.db
     └── uploads/
 ```
 
-### `.gitignore` essentials
-
-```gitignore
-# Runtime data — never commit
-data/
-asyncapi-docs/
-
-# Cloudflare credentials — never commit
-.cloudflared/*.json
-.cloudflared/config.yml
-
-# Python
-__pycache__/
-*.pyc
-.venv/
-
-# Secrets
-.env
-*.secret
-```
-
----
 
 ## 6. Services Reference
 
-| Service | Image | Port | Command | Key volumes |
+| Service | Image | Port | Entry point | Key volumes |
 |---|---|---|---|---|
 | `mosquitto` | `eclipse-mosquitto:2` | 1883 | — | `./mosquitto.conf` |
-| `producer` | project build | — | `python producer.py --verbose --host mosquitto` | `./data` |
-| `consumer` | project build | — | `python consumer.py --host mosquitto --topic ... --out ...` | `./data` |
-| `api` | project build | **5000** | `python api.py` | `./data` |
+| `producer` | project build | — | `python producer.py` | `./data` |
+| `consumer` | project build | — | `python consumer.py` | `./data` |
+| `api` | project build | **5000** | `python api.py` | `./data`, `./models`, `./models_v_s` |
 | `upload` | project build | **5001** | `python upload.py` | `./data`, `./models_v_s` |
 | `asyncapi-docs` | project build | **5002** | `python serve_yaml.py` | `./asyncapi.yml` |
-| `virtual_sensor_rules` | project build | — | `python virtual_sensor_rules.py --broker mosquitto` | — |
-| `virtual_sensor_ml` | project build | — | `python virtual_sensor_ml.py --broker mosquitto` | `./models_v_s` |
+| `virtual_sensor_rules` | project build | — | `python virtual_sensor_rules.py` | — |
+| `virtual_sensor_ml` | project build | — | `python virtual_sensor_ml.py` | `./models_v_s` |
 | `node-red` | `nodered/node-red:latest` | **1880** | — | `./node-red:/data` |
+| `homeassistant` | `homeassistant/home-assistant:stable` | **8123** | — | `./ha-config:/config` |
 
-### Useful docker compose commands
+### Useful Docker Compose Commands
 
 ```bash
-# Start all services in background
-docker compose up -d
+# Start all services (foreground — logs visible)
+docker compose up --build
 
-# Follow logs for a single service
+# Start in background
+docker compose up --build -d
+
+# Follow logs for one service
 docker compose logs -f api
 
-# Restart one service (e.g. after model retrain)
+# Restart one service after a change
 docker compose restart virtual_sensor_ml
 
-# Stop everything and remove containers (data volumes preserved)
+# Stop all containers (data volumes preserved)
 docker compose down
 
-# Full reset including named volumes
+# Full reset including volumes (WARNING: deletes the database)
 docker compose down -v
 ```
 
@@ -290,18 +285,18 @@ docker compose down -v
 
 ## 7. MQTT Topic Structure
 
-All topics follow the pattern `smartbin/{bin_id}/{sensor_id}/...`
-allowing multi-bin deployment by changing `bin_id` (default: `bin-01`).
+All topics follow the pattern `smartbin/{bin_id}/{sensor_id}/...`.
+The `bin_id` and `sensor_id` segments are configurable, enabling multi-bin deployments.
 
 | Topic | Publisher | Payload | Retained | QoS |
 |---|---|---|---|---|
 | `smartbin/bin-01/pir-01/events` | producer | Full JSON-LD Observation | No | 1 |
 | `smartbin/bin-01/pir-01/motion` | producer | `detected` \| `clear` | No | 1 |
-| `smartbin/bin-01/fill-level/state` | producer | `0`–`100` (string) | No | 1 |
+| `smartbin/bin-01/fill-level/state` | producer | `0`–`100` | No | 1 |
 | `smartbin/bin-01/pir-01/events/status` | producer | `online` \| `offline` (LWT) | Yes | 1 |
 | `smartbin/bin-01/command` | api | `{action, emptied_at, emptied_by}` | No | 1 |
 | `smartbin/bin-01/status` | api | `{state, emptied_at}` | Yes | 1 |
-| `smartbin/bin-01/usage` | virtual_sensor_rules / node-red | `{usage_level, event_count, window_minutes}` | Yes | 1 |
+| `smartbin/bin-01/usage` | virtual_sensor_rules | `{usage_level, event_count, window_minutes}` | Yes | 1 |
 | `smartbin/bin-01/prediction` | virtual_sensor_ml | `{prediction, confidence, predicted_hour}` | Yes | 1 |
 | `smartbin/bin-01/alert` | node-red | `{type, fill_level, timestamp}` | Yes | 1 |
 | `homeassistant/binary_sensor/bin-01_pir-01/config` | producer | HA Discovery JSON | Yes | 1 |
@@ -309,82 +304,65 @@ allowing multi-bin deployment by changing `bin_id` (default: `bin-01`).
 | `homeassistant/sensor/bin-01_usage_level/config` | virtual_sensor_rules | HA Discovery JSON | Yes | 1 |
 | `homeassistant/sensor/bin-01_motion_count/config` | virtual_sensor_rules | HA Discovery JSON | Yes | 1 |
 
-### Test with mosquitto CLI
-
-```bash
-# Subscribe to all smartbin topics
-docker exec -it smartbin-mosquitto-1 \
-  mosquitto_sub -v -t 'smartbin/#'
-
-# Inject a synthetic motion event (for testing without Pi)
-curl -X POST http://localhost:5000/mqtt/publish \
-  -H "Content-Type: application/json" \
-  -d '{
-    "topic": "smartbin/bin-01/pir-01/events",
-    "payload": "{\"motion_state\":\"detected\",\"fill_level\":42,\"item_count\":21,\"seq\":1,\"event_time\":\"2026-01-01T12:00:00Z\",\"device_id\":\"urn:dev:team08:pir-01\",\"@type\":\"sosa:Observation\"}",
-    "qos": 1
-  }'
-```
 
 ---
 
 ## 8. REST API Endpoints
 
-Base URL: `http://localhost:5000` · Swagger UI: `http://localhost:5000/`
+Base URL: `http://localhost:5000` · Interactive Swagger UI: `http://localhost:5000/`
 
-### `/bins` namespace
+### `/bins` Namespace
 
 | Method | Path | Description |
 |---|---|---|
 | GET | `/bins/` | List all registered bins |
 | GET | `/bins/{bin_id}` | Bin detail (name, location, status) |
-| GET | `/bins/{bin_id}/events?limit=50` | Recent motion events (SQLite + JSONL fallback) |
+| GET | `/bins/{bin_id}/events?limit=50` | Recent motion events (SQLite) |
+| GET | `/bins/{bin_id}/usage` | Full weekly usage heatmap (7 days × 24 hours) |
+| GET | `/bins/{bin_id}/usage/peak?day=0` | Peak hour for a given day-of-week |
+| GET | `/bins/{bin_id}/usage/least?day=0` | Least-active hour for a given day-of-week |
+| GET | `/bins/{bin_id}/usage/data` | Download usage as CSV for ML training |
 | POST | `/bins/{bin_id}/empty` | Mark bin emptied — publishes MQTT command |
-| GET | `/bins/{bin_id}/emptied-history?limit=20` | History of emptying events |
-| GET | `/bins/{bin_id}/peak-hour` | Hour of day with highest event count (today) |
-| GET | `/bins/{bin_id}/hourly-activity` | Event count per hour for today (hours with activity only) |
+| GET | `/bins/{bin_id}/emptied-history?limit=20` | Emptying event history |
 
 #### Example — peak-hour response
 
 ```json
 {
   "bin_id": "bin-01",
-  "date": "2026-01-15",
-  "peak_hour": 12,
-  "peak_hour_label": "12:00–13:00",
-  "event_count": 23
+  "day_of_week": 0,
+  "hour": 12,
+  "usage_count": 23,
+  "label": "peak"
 }
 ```
 
-#### Example — hourly-activity response
-
-```json
-{
-  "bin_id": "bin-01",
-  "date": "2026-01-15",
-  "intervals": [
-    {"hour": 8,  "hour_label": "08:00–09:00", "event_count": 7},
-    {"hour": 12, "hour_label": "12:00–13:00", "event_count": 23},
-    {"hour": 15, "hour_label": "15:00–16:00", "event_count": 11}
-  ]
-}
-```
-
-### `/sensors` namespace
+### `/sensors` Namespace
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/sensors/` | List all registered sensors |
+| GET | `/sensors/` | List all sensors with mounted bin |
 | GET | `/sensors/{sensor_id}` | Sensor detail (model, pin, mounted_on) |
-| GET | `/sensors/{sensor_id}/events?limit=50` | Events filtered by sensor URI (SQLite) |
+| GET | `/sensors/{sensor_id}/events?limit=50` | Events for a specific sensor |
 
-### `/mqtt` namespace
+### `/mqtt` Namespace
 
 | Method | Path | Description |
 |---|---|---|
 | POST | `/mqtt/publish` | Publish arbitrary message to any topic |
+| POST | `/mqtt/subscribe` | Subscribe to an extra topic at runtime |
 | GET | `/mqtt/topics` | All topics seen since API start (last message each) |
 | GET | `/mqtt/topics/{topic}` | Last message on a specific topic |
+| DELETE | `/mqtt/topics/{topic}` | Remove topic from in-memory store |
+| GET | `/mqtt/messages?limit=100` | All stored MQTT messages from DB |
+| GET | `/mqtt/messages/{bin_id}` | Stored messages filtered by bin |
+
+### `/ml` Namespace
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/ml/retrain` | Retrain the busy/quiet predictor from real DB data |
+| GET | `/ml/predict` | Predict busy/quiet for the next hour |
 
 ---
 
@@ -392,181 +370,188 @@ Base URL: `http://localhost:5000` · Swagger UI: `http://localhost:5000/`
 
 ### Schema
 
-```sql
--- db/schema.sql  (applied automatically on first run via api.py)
+The database is initialised automatically by `api.py` on first start. The full schema
+is also available in `db/schema.sql`.
 
-CREATE TABLE IF NOT EXISTS events (
+```sql
+-- One row per physical bin (expandable for multi-bin)
+CREATE TABLE IF NOT EXISTS Bins (
+    bin_id    TEXT PRIMARY KEY,          -- e.g. "bin-01"
+    bin_uri   TEXT UNIQUE,               -- URN e.g. "urn:wastebin:bin-01"
+    name      TEXT,
+    location  TEXT,
+    status    TEXT DEFAULT 'active',
+    created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+-- One row per PIR sensor
+CREATE TABLE IF NOT EXISTS Sensors (
+    sensor_id   TEXT PRIMARY KEY,        -- e.g. "pir-01"
+    sensor_uri  TEXT UNIQUE,
+    sensor_type TEXT DEFAULT 'PIR',
+    model       TEXT,
+    status      TEXT DEFAULT 'active',
+    created_at  TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+-- Which sensor lives in which bin (many-to-one)
+CREATE TABLE IF NOT EXISTS MountedOn (
+    sensor_id  TEXT REFERENCES Sensors(sensor_id) ON DELETE CASCADE,
+    bin_id     TEXT REFERENCES Bins(bin_id) ON DELETE CASCADE,
+    mounted_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    PRIMARY KEY (sensor_id, bin_id)
+);
+
+-- Every JSON-LD motion observation
+CREATE TABLE IF NOT EXISTS PIREvents (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-    bin_id              TEXT    NOT NULL,
-    sensor_id           TEXT    NOT NULL,
-    event_time          TEXT    NOT NULL,
+    event_id            TEXT UNIQUE,
+    sensor_id           TEXT NOT NULL REFERENCES Sensors(sensor_id),
+    bin_id              TEXT NOT NULL REFERENCES Bins(bin_id),
+    event_time          TEXT NOT NULL,   -- ISO-8601 UTC (sosa:resultTime)
     ingest_time         TEXT,
-    motion_state        TEXT,
-    fill_level          INTEGER,
-    item_count          INTEGER,
+    motion_state        TEXT DEFAULT 'detected',
+    event_type          TEXT,
     seq                 INTEGER,
     run_id              TEXT,
+    item_count          INTEGER,
+    fill_level          INTEGER,         -- 0–100 %
     pipeline_latency_ms REAL
 );
 
-CREATE INDEX IF NOT EXISTS idx_events_bin_time
-    ON events (bin_id, event_time DESC);
+-- Hourly usage counters — the heatmap source
+CREATE TABLE IF NOT EXISTS BinUsage (
+    bin_id      TEXT NOT NULL REFERENCES Bins(bin_id) ON DELETE CASCADE,
+    day_of_week INTEGER NOT NULL CHECK(day_of_week BETWEEN 0 AND 6),
+    hour        INTEGER NOT NULL CHECK(hour BETWEEN 0 AND 23),
+    usage_count INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (bin_id, day_of_week, hour)
+);
 
-CREATE INDEX IF NOT EXISTS idx_events_sensor
-    ON events (sensor_id, event_time DESC);
-
-CREATE TABLE IF NOT EXISTS emptied_records (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    bin_id     TEXT NOT NULL,
-    emptied_at TEXT NOT NULL,
-    emptied_by TEXT
+-- Raw MQTT payloads for post-crash debugging
+CREATE TABLE IF NOT EXISTS MQTTMessages (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    bin_id      TEXT REFERENCES Bins(bin_id),
+    topic       TEXT NOT NULL,
+    payload     TEXT NOT NULL,
+    qos         INTEGER DEFAULT 1,
+    retained    INTEGER DEFAULT 0,
+    received_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 ```
 
-### Direct access
+### Database Backup
 
 ```bash
-# Open SQLite shell inside the running api container
-docker exec -it smartbin-api-1 sqlite3 /app/data/smartbin.db
-
-# Useful queries
-.tables
-SELECT COUNT(*) FROM events;
-SELECT bin_id, COUNT(*) as n FROM events GROUP BY bin_id;
-SELECT * FROM events ORDER BY event_time DESC LIMIT 5;
-
-# Peak hour today
-SELECT strftime('%H', event_time) as hour, COUNT(*) as cnt
-FROM events
-WHERE bin_id = 'bin-01'
-  AND DATE(event_time) = DATE('now')
-GROUP BY hour
-ORDER BY cnt DESC
-LIMIT 1;
-```
-
-### Backup
-
-```bash
-# Copy the database file out of the container volume
 docker cp smartbin-api-1:/app/data/smartbin.db ./backup_$(date +%Y%m%d).db
 ```
 
 ---
 
+Here is the corrected **Section 10** for your README, matching your actual Node-RED setup:
+
+***
+
 ## 10. Node-RED Flows
 
-Node-RED runs at `http://localhost:1880`.
-All flows are version-controlled in `node-red/flows.json` and mounted into the container.
+Node-RED runs at `http://localhost:1880`. The dashboard UI is at `http://localhost:1880/ui`.
+All flows are version-controlled in `node-red/flows.json` and loaded automatically from the mounted volume.
 
-### Importing flows (first run)
+### What the Flows Do
 
-Flows are loaded automatically from the mounted volume.
-If you need to re-import manually:
-
-1. Open `http://localhost:1880`
-2. Hamburger menu → **Import** → **Clipboard**
-3. Paste the contents of `node-red/flows.json`
-4. Click **Import** → **Deploy**
-
-### Exporting flows after editing
-
-After making changes in the Node-RED UI:
-
-1. Hamburger menu → **Export** → **All flows** → **JSON**
-2. Copy and overwrite `node-red/flows.json` in the repository
-3. Commit: `git add node-red/flows.json && git commit -m "update node-red flows"`
-
-### What the flows do
-
-| Flow | Subscribes to | Logic | Publishes to |
+| Flow | Subscribes to | Logic | Publishes / Writes |
 |---|---|---|---|
-| **Event filter + count** | `smartbin/+/+/events` | Parses payload, keeps `detected`, counts in rolling 10-min window | `smartbin/{bin_id}/usage` |
-| **Level classification** | (internal, from above) | switch node: idle/low/medium/high | `smartbin/{bin_id}/usage` |
-| **Fill level alert** | `smartbin/+/fill-level/state` | switch: value ≥ 80 | `smartbin/{bin_id}/alert` |
-| **SQLite writer** | `smartbin/+/+/events` | Builds INSERT, writes row | `smartbin.db` via sqlite node |
+| **Motion router** | `smartbin/bin-01/pir-01/events` · `smartbin/bin-01/pir-01/motion` | `switch` node: routes `detected` → function 1, `clear` → cleared debug | — |
+| **Rolling counter + classifier** | (internal, from switch) | `function 1`: 10-min deque per bin, classifies idle / low / medium / high | `smartbin/bin-01/usage/nodered` (retained) |
+| **High-usage alert** | (internal, from function 1) | `highNotification` switch: fires when `level === "high"` → `POST_ALERT` function → HTTP POST to `api:5000/mqtt/publish` | `smartbin/bin-01/alerts` (retained) |
+| **Event log** | (internal, from function 1) | File node: appends one line per event | `/app/data/detected_events.log` |
+| **Dashboard gauge** | (internal, from function 1) | `ui_gauge`: displays event count 0–20, green/yellow/red segments | Dashboard at `/ui` |
+| **Dashboard level text** | (internal, from function 1) | `ui_text`: displays current usage level string | Dashboard at `/ui` |
+| **Heartbeat** | inject (every 60 s) | `function 2`: builds keepalive payload | `smartbin/bin-01/nodered/heartbeat` |
 
-### Installing missing Node-RED nodes
+### Dashboard
 
-If the `node-red-node-sqlite` package is missing after a fresh pull:
+The Node-RED Dashboard (served at `http://localhost:1880/ui`) provides two live widgets for `bin-01`:
 
-```bash
-docker exec -it smartbin-node-red-1 \
-  npm install --prefix /usr/src/node-red node-red-node-sqlite
-docker compose restart node-red
-```
+- **Bin usage** — gauge showing events in the last 10 minutes (green 0–3, yellow 4–10, red 11+)
+- **level** — text display of the current classification (`idle` / `low` / `medium` / `high`)
 
-This is handled automatically if you add it to the `node-red/settings.js` packages list (see below).
+### Required Node-RED Nodes
 
-### `node-red/settings.js` — key settings
-
-```js
-module.exports = {
-    uiPort: 1880,
-    mqttReconnectTime: 15000,
-    serialReconnectTime: 15000,
-    debugMaxLength: 1000,
-    // Packages to install on startup
-    editorTheme: {
-        projects: { enabled: false }
-    }
-}
-```
+`node-red-dashboard` is installed **automatically** on container start via the `NODE_RED_INSTALL_EXTRA_PACKAGES` environment variable set in `docker-compose.yml` — no manual steps needed for new users.
 
 ---
 
 ## 11. Virtual Sensors
 
-### Rule-based (`virtual_sensor_rules.py`)
+### Rule-Based (`virtual_sensor_rules.py`)
 
-Subscribes to `smartbin/bin-01/pir-01/events`, maintains a `collections.deque` as a
-10-minute rolling window. Evaluates every 30 seconds.
+Subscribes to `smartbin/{bin_id}/{sensor_id}/events`. Maintains a `collections.deque`
+as a rolling time window and evaluates usage level every 30 seconds (configurable).
 
-| Level | Condition |
+| Level | Condition (events in window) |
 |---|---|
-| idle | count == 0 |
-| low | 1 ≤ count ≤ 3 |
-| medium | 4 ≤ count ≤ 10 |
-| high | count > 10 |
+| `idle` | count == 0 |
+| `low` | 1 ≤ count ≤ 3 |
+| `medium` | 4 ≤ count ≤ 10 |
+| `high` | count > 10 |
 
-Publishes to `smartbin/bin-01/usage` (retained, QoS 1).
+Publishes to `smartbin/{bin_id}/usage` (retained, QoS 1) and auto-registers two
+Home Assistant entities via MQTT Discovery.
 
-### ML-based (`virtual_sensor_ml.py`)
-
-Loads `models_v_s/busy_predictor.joblib` at startup.
-Every 60 seconds, predicts whether the **next hour** will be `busy` or `quiet`.
-
-Features: `hour`, `day_of_week`, `is_weekend`.
-Model: `RandomForestClassifier` (50 estimators), trained at Docker build time.
-Accuracy: 94% on held-out test set (see classification report in README).
-
-Publishes to `smartbin/bin-01/prediction` (retained, QoS 1).
-
-### Retraining with real data
+**CLI arguments:**
 
 ```bash
-# Option A: via upload UI at http://localhost:5001
-# Upload a CSV with columns: day_of_week,hour,is_weekend,event_count,label
-# Click "Retrain model with latest file"
-
-# Option B: CLI inside the container
-docker exec -it smartbin-virtual_sensor_ml-1 python train_model.py
-
-# Option C: from a CSV you collected
-docker cp my_real_data.csv smartbin-api-1:/app/data/uploads/
-docker exec -it smartbin-api-1 python -c "
-import pandas as pd, joblib
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-df = pd.read_csv('/app/data/uploads/my_real_data.csv')
-X = df[['day_of_week','hour','is_weekend']]; y = df['label']
-clf = RandomForestClassifier(n_estimators=50, random_state=42)
-clf.fit(*train_test_split(X, y, test_size=.2, random_state=42)[:2])
-joblib.dump(clf, '/app/models_v_s/busy_predictor.joblib')
-print('Done')
-"
-docker compose restart virtual_sensor_ml
+python virtual_sensor_rules.py \
+  --broker mosquitto \
+  --port 1883 \
+  --bin-id bin-01 \
+  --subscribe-topic smartbin/bin-01/pir-01/events \
+  --publish-topic smartbin/bin-01/usage \
+  --window 10 \
+  --interval 30
 ```
+
+### ML-Based (`virtual_sensor_ml.py`)
+
+Loads `models_v_s/busy_predictor.joblib` at startup.
+Every 60 seconds (configurable), predicts whether the **next hour** will be `busy`
+or `quiet`.
+
+**Features used:** `day_of_week`, `hour`, `is_weekend`  
+**Model:** `RandomForestClassifier` (50 estimators), trained at Docker build time via
+`train_model.py`
+
+Publishes to `smartbin/{bin_id}/prediction` (retained, QoS 1).
+
+**CLI arguments:**
+
+```bash
+python virtual_sensor_ml.py \
+  --broker mosquitto \
+  --port 1883 \
+  --bin-id bin-01 \
+  --publish-topic smartbin/bin-01/prediction \
+  --model-path models_v_s/busy_predictor.joblib \
+  --interval 60
+```
+
+### Retraining the Model
+
+**Option A — API endpoint (easiest):**
+```bash
+curl -X POST http://localhost:5000/ml/retrain
+```
+Falls back to synthetic data automatically if fewer than 50 real samples exist.
+
+**Option B — Upload UI at http://localhost:5001:**  
+```bash
+# Download usage CSV for bin-01
+curl http://localhost:5000/bins/bin-01/usage/data -o my_data.csv
+
+# Upload the CSV 
+Upload the csv `day_of_week,hour,is_weekend,event_count,label`
+``` 
 
 ---
 
@@ -574,48 +559,36 @@ docker compose restart virtual_sensor_ml
 
 ### Prerequisites
 
-- Home Assistant instance (on the same network or accessible via Cloudflare)
-- MQTT Integration installed in HA and pointed at `<Pi IP>:1883`
+- Home Assistant instance (running locally via Docker or on the same network)
+- MQTT Integration configured and pointing at the Pi's broker
 
-### Setup
+### Setup Steps
 
-1. In Home Assistant: **Settings → Devices & Services → Add Integration → MQTT**
-2. Broker: `<Raspberry Pi IP address>` · Port: `1883`
-3. All four sensor entities appear automatically via MQTT Discovery within 30 seconds of starting the system.
+1. Open Home Assistant → **Settings → Devices & Services → Add Integration → MQTT**
+2. Set Broker to `<Raspberry Pi IP address>` or 1``localhost`  and Port to `1883`
+3. Click **Submit** — no username/password needed for the default config
 
-### Auto-discovered entities
+All sensor entities appear **automatically within ~30 seconds** via MQTT Discovery.
 
-| Entity | Type | State topic |
+### Auto-Discovered Entities
+
+| Entity ID | Type | State topic |
 |---|---|---|
 | `binary_sensor.waste_bin_bin01_motion` | Binary sensor | `smartbin/bin-01/pir-01/motion` |
 | `sensor.waste_bin_bin01_fill_level` | Sensor (%) | `smartbin/bin-01/fill-level/state` |
-| `sensor.waste_bin_bin01_usage_level` | Sensor | `smartbin/bin-01/usage` (JSON template) |
-| `sensor.waste_bin_bin01_motion_count` | Sensor (events) | `smartbin/bin-01/usage` (JSON template) |
+| `sensor.waste_bin_bin01_usage_level` | Sensor (text) | `smartbin/bin-01/usage` |
+| `sensor.waste_bin_bin01_motion_count` | Sensor (events) | `smartbin/bin-01/usage` |
 | `sensor.waste_bin_bin01_prediction` | Sensor | `smartbin/bin-01/prediction` |
 | `binary_sensor.waste_bin_bin01_alert` | Binary sensor | `smartbin/bin-01/alert` |
-
-### Suggested automation — empty bin alert
-
-```yaml
-# In Home Assistant configuration.yaml or via UI Automation editor
-alias: Notify when bin is nearly full
-trigger:
-  - platform: numeric_state
-    entity_id: sensor.waste_bin_bin01_fill_level
-    above: 80
-action:
-  - service: notify.mobile_app_your_phone
-    data:
-      message: "Bin bin-01 is {{ states('sensor.waste_bin_bin01_fill_level') }}% full."
-```
 
 ---
 
 ## 13. Training Data Upload & Retraining
 
-Upload service runs at `http://localhost:5001`.
+The upload service runs at `http://localhost:5001`. It accepts CSV files, renders
+visualisation charts, and can trigger a model retrain.
 
-### CSV format
+### CSV Format
 
 ```csv
 day_of_week,hour,is_weekend,event_count,label
@@ -633,50 +606,62 @@ day_of_week,hour,is_weekend,event_count,label
 | `event_count` | int | ≥ 0 |
 | `label` | string | `busy` or `quiet` |
 
-### What the upload page shows
+The busy/quiet threshold is set in `train_model.py` as `BUSY_THRESHOLD` (default: 10
+events per hour). Adjust this constant before retraining to match your environment.
 
-After uploading, five Seaborn charts are rendered inline:
+### What the Upload Page Shows
 
+After uploading, five Seaborn charts are rendered:
 - **Class balance** — bar chart of busy vs quiet rows
-- **Event count distribution** — KDE density curves per class with threshold line
+- **Event count distribution** — KDE density per class
 - **Mean events by hour** — weekday vs weekend line chart
-- **Activity heatmap** — day-of-week × hour heat map (YlOrRd palette)
+- **Activity heatmap** — day-of-week × hour heatmap (YlOrRd palette)
 - **Labels by day** — stacked bar chart per weekday
 
 ---
 
 ## 14. Cloudflare Tunnel (Remote Access)
 
-Exposes four services publicly via HTTPS with no open router ports.
+Cloudflare Tunnel exposes your local services over HTTPS with **no open router ports**
+and **no static IP** required. Four services are routed through sub-domains.
 
-### Step 1 — Buy domain
+### Step 1 — Register a Domain
 
-Cloudflare Dashboard → Domain Registration → Register Domains → choose `yourdomain.com`
+Cloudflare Dashboard → **Domain Registration** → Register or transfer your domain
+(`yourdomain.com`). The domain must be managed by Cloudflare DNS.
 
-### Step 2 — Install cloudflared on Pi
+### Step 2 — Install `cloudflared` on the Pi
 
 ```bash
 curl -L https://pkg.cloudflare.com/cloudflare-main.gpg \
   | sudo tee /usr/share/keyrings/cloudflare-main.gpg > /dev/null
+
 echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] \
   https://pkg.cloudflare.com/cloudflare-workers-proxy focal main" \
   | sudo tee /etc/apt/sources.list.d/cloudflare-workers-proxy.list
+
 sudo apt update && sudo apt install cloudflared -y
+cloudflared --version   # verify
 ```
 
-### Step 3 — Create the tunnel
+### Step 3 — Authenticate and Create the Tunnel
 
 ```bash
-cloudflared tunnel login           # opens browser login
-cloudflared tunnel create smartbin # note the UUID printed
+cloudflared tunnel login          # opens a browser login page
+cloudflared tunnel create smartbin
+# Note the UUID printed — you will need it in Step 4
 ```
 
-### Step 4 — Configure routing
+### Step 4 — Write the Config File
 
-Copy `.cloudflared/config.yml.example` to `.cloudflared/config.yml` and fill in your UUID:
+Copy the example to the real config path and fill in your values:
+
+```bash
+cp .cloudflared/config.yml.example ~/.cloudflared/config.yml
+```
 
 ```yaml
-# .cloudflared/config.yml  (DO NOT COMMIT — credentials inside)
+# ~/.cloudflared/config.yml  ← DO NOT COMMIT (credentials inside)
 tunnel: <YOUR_TUNNEL_UUID>
 credentials-file: /home/pi/.cloudflared/<YOUR_TUNNEL_UUID>.json
 
@@ -692,7 +677,11 @@ ingress:
   - service: http_status:404
 ```
 
-### Step 5 — Add DNS records
+> **Add or remove routes** by editing the `ingress` block. Each entry maps a sub-domain
+> to a local port. You can expose Node-RED (`localhost:1880`) the same way, but consider
+> enabling Node-RED password authentication first.
+
+### Step 5 — Create DNS Records
 
 ```bash
 cloudflared tunnel route dns smartbin ha.yourdomain.com
@@ -701,17 +690,20 @@ cloudflared tunnel route dns smartbin upload.yourdomain.com
 cloudflared tunnel route dns smartbin asyncapi.yourdomain.com
 ```
 
-### Step 6 — Run as system service
+Cloudflare creates CNAME records automatically. These propagate in seconds.
+
+### Step 6 — Run as a System Service
 
 ```bash
 sudo cloudflared service install
 sudo systemctl enable cloudflared
 sudo systemctl start cloudflared
+systemctl status cloudflared        # confirm "active (running)"
 ```
 
-The tunnel reconnects automatically after Pi reboots.
+The tunnel reconnects automatically on Pi reboots.
 
-### What to commit vs what NOT to commit
+### What to Commit vs. What NOT to Commit
 
 | File | Commit? | Reason |
 |---|---|---|
@@ -723,94 +715,268 @@ The tunnel reconnects automatically after Pi reboots.
 
 ## 15. Configuration Reference
 
-All configurable values and their defaults:
+All parameters and their defaults. Values can be overridden via CLI flags inside
+`docker-compose.yml` under the relevant service's `command:` key.
 
-| Parameter | Default | Where |
-|---|---|---|
-| MQTT broker host | `mosquitto` (Docker) / `localhost` (bare) | `--host` CLI arg |
-| MQTT broker port | `1883` | `--port` CLI arg |
-| PIR GPIO pin (BCM) | `17` | `--pin` CLI arg |
-| Sample interval (s) | `0.1` (10 Hz) | `--sample-interval` |
-| Cooldown between events (s) | `5.0` | `--cooldown` |
-| Minimum HIGH duration (s) | `0.2` | `--min-high` |
-| Bin capacity (disposal events = 100%) | `50` | `BIN_CAPACITY` in `producer.py` |
-| Event queue max size | `100` | `--queue-size` |
-| Producer run duration (s) | `600` (10 min) | `--duration` |
-| Rolling window for rules (min) | `10` | `--window` in `virtual_sensor_rules.py` |
-| Rules evaluation interval (s) | `30` | `--interval` |
-| ML prediction interval (s) | `60` | `--interval` in `virtual_sensor_ml.py` |
-| Fill alert threshold (%) | `80` | Node-RED switch node |
-| MQTT broker env (api) | `MQTT_BROKER=mosquitto` | `docker-compose.yml` environment |
-
----
-
-## 16. Extending the System
-
-### Add a second bin
-
-1. Start a second producer with `--bin-id bin-02 --sensor-id pir-02 --pin 27`
-2. Add a second entry in the Node-RED MQTT subscribe nodes using `bin-02`
-3. Add a second `wastebin.jsonld` and `sensor.jsonld` under `models/`
-4. The API's `_build_registries()` currently reads a single file — extend it to glob all `wastebin-*.jsonld` files
-
-### Add a new sensor type (e.g. ultrasonic fill sensor)
-
-1. Create `src/pirlib/ultrasonic_sampler.py` following the `PirSampler` interface (`.read()` → bool/float)
-2. Add a new topic `smartbin/{bin_id}/fill-distance/state`
-3. Cross-validate against the PIR-derived fill level in a new virtual sensor
-
-### Add a new API endpoint
-
-```python
-# In api.py, add under the /bins namespace:
-@ns.route("/<string:bin_id>/your-new-endpoint")
-class YourEndpoint(Resource):
-    def get(self, bin_id):
-        """Your description shown in Swagger."""
-        if not find_bin(bin_id):
-            api.abort(404, f"Bin '{bin_id}' not found")
-        # query DB or MQTT store
-        return {"result": "..."}, 200
-```
-
-### Add a new Node-RED flow
-
-1. Edit in the UI at `http://localhost:1880`
-2. Deploy
-3. Export via Hamburger → Export → All flows → JSON
-4. Overwrite `node-red/flows.json` and commit
-
-### Multi-Pi deployment
-
-Each Pi runs its own producer with a unique `--bin-id`. Point all producers at a shared
-Mosquitto broker IP. The consumer, API, and Node-RED can run on a central server,
-subscribing to `smartbin/#` to receive events from all bins.
+| Parameter | Default | CLI flag / env var | Service |
+|---|---|---|---|
+| MQTT broker host | `mosquitto` (Docker) / `localhost` (bare) | `--host` / `--broker` | producer, consumer, virtual sensors |
+| MQTT broker port | `1883` | `--port` | all MQTT clients |
+| PIR GPIO pin (BCM) | `17` | `--pin` | producer |
+| Bin ID | `bin-01` | `--bin-id` | producer, virtual sensors |
+| Sensor ID | `pir-01` | `--sensor-id` | producer |
+| Device ID (URN) | `urn:dev:team08:pir-01` | `--device-id` | producer |
+| Bin capacity (events = 100%) | `50` | `BIN_CAPACITY` constant in `producer.py` | producer |
+| Sample interval (s) | `0.1` (10 Hz) | `--sample-interval` | producer |
+| Cooldown between events (s) | `5.0` | `--cooldown` | producer |
+| Minimum HIGH duration (s) | `0.2` | `--min-high` | producer |
+| Event queue max size | `100` | `--queue-size` | producer |
+| Producer run duration (s) | `7200` (2 h) | `--duration` | producer |
+| MQTT topic (events) | `smartbin/bin-01/pir-01/events` | `--topic` | producer |
+| Rolling window for rules (min) | `10` | `--window` | virtual_sensor_rules |
+| Rules evaluation interval (s) | `30` | `--interval` | virtual_sensor_rules |
+| Subscribe topic (rules) | `smartbin/bin-01/pir-01/events` | `--subscribe-topic` | virtual_sensor_rules |
+| Publish topic (rules) | `smartbin/bin-01/usage` | `--publish-topic` | virtual_sensor_rules |
+| ML model path | `models_v_s/busy_predictor.joblib` | `--model-path` | virtual_sensor_ml |
+| ML prediction interval (s) | `60` | `--interval` | virtual_sensor_ml |
+| Publish topic (ML) | `smartbin/bin-01/prediction` | `--publish-topic` | virtual_sensor_ml |
+| Busy threshold (events/h) | `10` | `BUSY_THRESHOLD` in `train_model.py` | training |
+| Fill alert threshold (%) | `80` | Node-RED switch node value | node-red |
+| MQTT broker env (API) | `mosquitto` | `MQTT_BROKER` env var in `docker-compose.yml` | api |
+| Database path | `smartbin.db` | `DBPATH` env var | api, database |
 
 ---
+Here is the updated **Section 16** based on the actual `database.py` code:
 
-## 17. Troubleshooting
+***
 
-### Producer fails with `lgpio` error
+## 16. Extending the System (Multi-Bin)
 
+The database schema is **fully multi-bin by design** — `PIR_Events`, `Bin_Usage`, and `MQTT_Messages` all use `bin_id` as a foreign key, and `upsert_bin()` / `upsert_sensor()` use `INSERT ... ON CONFLICT DO UPDATE` so new bins register themselves automatically the first time an event arrives. No schema migration is needed when adding bins.
+
+### Add a Second Bin
+
+Adding a second bin requires four changes:
+
+**1. Add a second producer service** in `docker-compose.yml`:
+
+```yaml
+producer-bin-02:
+  build: .
+  command: >
+    python3 producer.py
+      --verbose
+      --host mosquitto
+      --bin-id bin-02
+      --sensor-id pir-02
+      --pin 27
+  privileged: true
+  devices:
+    - /dev/gpiochip0:/dev/gpiochip0
+  volumes:
+    - ./data:/app/data
+  networks:
+    - smartbin-net
+  depends_on:
+    - mosquitto
 ```
-lgpio.error: can't connect to pigpio
-```
 
-This is expected on non-Pi hardware. The `PirSampler` automatically stubs out GPIO.
-No action needed — events simply won't be generated from hardware.
+> If you are on a Raspberry Pi 5, uncomment `/dev/gpiochip4` instead of `gpiochip0` — the chip changed between generations.
 
-### MQTT connection refused on startup
-
-Services start in parallel. The producer/consumer retry automatically
-(`reconnect_delay_set(min_delay=1, max_delay=30)`).
-If the error persists after 30 seconds:
+**2. Add JSON-LD model files** for the new bin and sensor:
 
 ```bash
-docker compose logs mosquitto
-docker compose restart mosquitto
+# Edit the model files :
+wastebin.jsonld → @id: "urn:wastebin:bin-02", sosa:hosts: pir-02
+sensor.jsonld   → @id: "urn:dev:team08:pir-02", gpioPin: 27, physicalPin: 13
+# Also add "urn:wastebin:bin-02" to pipeline:contains in environment.jsonld
 ```
 
-### Node-RED sqlite node missing
+**3. Add a second virtual sensor rules service**:
+
+```yaml
+virtual_sensor_rules_bin02:
+  build: .
+  command: >
+    python virtual_sensor_rules.py
+      --broker mosquitto
+      --bin-id bin-02
+      --subscribe-topic smartbin/bin-02/pir-02/events
+      --publish-topic smartbin/bin-02/usage
+  networks:
+    - smartbin-net
+  depends_on:
+    - mosquitto
+    - producer-bin-02
+```
+
+
+
+
+***
+
+
+## 17. Semantic Models (JSON-LD)
+
+```mermaid
+graph TD
+    %% ── Environment ──────────────────────────────
+    ENV["🏛️ urn:env:kypes\n<b>Kypes Lab</b>\nbot:Space\ntrafficLevel: high"]
+
+    %% ── Bins ─────────────────────────────────────
+    BIN01["🗑️ urn:wastebin:bin-01\n<b>Wastebin 01</b>\nsosa:Platform\ncapacity: 50 · grey plastic"]
+    BIN02["🗑️ urn:wastebin:bin-02\n<b>Wastebin 02</b>\nsosa:Platform\ncapacity: 50 · grey plastic"]
+
+    %% ── Sensors ──────────────────────────────────
+    PIR01["📡 urn:dev:team08:pir-01\n<b>HC-SR501 — Bin 01</b>\nsosa:Sensor\nGPIO 17 · pin 11"]
+    PIR02["📡 urn:dev:team08:pir-02\n<b>HC-SR501 — Bin 02</b>\nsosa:Sensor\nGPIO 27 · pin 13"]
+
+    %% ── Observable Property (shared) ─────────────
+    PROP["👁️ urn:prop:team08:motion\n<b>Motion</b>\nsosa:ObservableProperty"]
+
+    %% ── Relationships ────────────────────────────
+    ENV  -->|"pipeline:contains"| BIN01
+    ENV  -->|"pipeline:contains"| BIN02
+    ENV  -->|"pipeline:hostsSensors"| PIR01
+    ENV  -->|"pipeline:hostsSensors"| PIR02
+
+    BIN01 -->|"sosa:hosts"| PIR01
+    BIN02 -->|"sosa:hosts"| PIR02
+
+    PIR01 -->|"sosa:isHostedBy"| BIN01
+    PIR02 -->|"sosa:isHostedBy"| BIN02
+
+    PIR01 -->|"sosa:observes"| PROP
+    PIR02 -->|"sosa:observes"| PROP
+
+    PIR01 -->|"pipeline:deployedIn"| ENV
+    PIR02 -->|"pipeline:deployedIn"| ENV
+
+    %% ── Styling ──────────────────────────────────
+    classDef env      fill:#d4edda,stroke:#28a745,color:#155724,rx:8
+    classDef bin      fill:#cce5ff,stroke:#004085,color:#004085,rx:8
+    classDef sensor   fill:#fff3cd,stroke:#856404,color:#533f03,rx:8
+    classDef prop     fill:#e2d9f3,stroke:#6f42c1,color:#432874,rx:8
+
+    class ENV env
+    class BIN01,BIN02 bin
+    class PIR01,PIR02 sensor
+    class PROP prop
+```
+
+The `models/` directory contains four JSON-LD files that give every entity in the system a globally unique, dereferenceable identity using standard ontologies. These are not runtime config — they are machine-readable semantic descriptions consumed by the API's `_build_registries()` and served as Linked Data.
+
+### Ontology Prefixes Used
+
+| Prefix | Namespace | Purpose |
+|---|---|---|
+| `schema` | `https://schema.org/` | General-purpose names, descriptions, values |
+| `bot` | `https://w3id.org/bot#` | Building topology (Space, Zone, Building) |
+| `sosa` | `http://www.w3.org/ns/sosa/` | Sensor, Platform, Observation, ObservableProperty |
+| `ssn` | `http://www.w3.org/ns/ssn/` | Sensor system properties |
+| `ssn-system` | `http://www.w3.org/ns/ssn/systems/` | MeasurementRange, SystemCapability |
+| `pipeline` | `…/docs/Ontology.md#` | Project-specific extensions (GPIO pin, fill level, traffic, etc.) |
+| `xsd` | `http://www.w3.org/2001/XMLSchema#` | Typed literals (float, integer, date, string) |
+
+***
+
+### `models/environment.jsonld` — Deployment Space
+
+Describes the physical room where the bins are deployed as a `bot:Space`.
+
+```json
+{
+  "@id":   "urn:env:kypes",
+  "@type": "bot:Space",
+  "name":  "Kypes Lab",
+  "pipeline:spatialHierarchy": {
+    "campus": "University Campus", "building": "basiko",
+    "floor": "0", "room": "Kypes Lab"
+  },
+  "pipeline:trafficLevel": "high",
+  "pipeline:contains":      ["urn:wastebin:bin-01"],
+  "pipeline:hostsSensors":  ["urn:dev:team08:pir-01"]
+}
+```
+
+Key fields:
+
+- **`pipeline:trafficLevel`** — `high` / `medium` / `low`. Informs about baseline expectation for the location.
+- **`pipeline:contains`** — list of bin URNs physically present in this space. Add `"urn:wastebin:bin-02"` when deploying a second bin.
+- **`pipeline:hostsSensors`** — list of sensor URNs mounted in this space.
+
+***
+
+### `models/sensor.jsonld` — Sensor Descriptions
+
+Describes each HC-SR501 sensor as a `sosa:Sensor` with full hardware capabilities.
+
+**Key properties for each sensor:**
+
+| Property | `pir-01` (bin-01) | `pir-02` (bin-02) |
+|---|---|---|
+| `@id` | `urn:dev:team08:pir-01` | `urn:dev:team08:pir-02` |
+| `pipeline:gpioPin` | **17** (BCM) | **27** (BCM) |
+| `pipeline:physicalPin` | 11 | 13 |
+| `pipeline:cooldownS` | 5.0 s | 5.0 s |
+| `pipeline:sampleIntervalS` | 0.1 s (10 Hz) | 0.1 s |
+| `pipeline:operatingMode` | `repeat-trigger` | `repeat-trigger` |
+| `sosa:isHostedBy` | `urn:wastebin:bin-01` | `urn:wastebin:bin-02` |
+
+The `ssn:hasProperty` array records physical hardware limits (detection range 0.5–7 m, angle 120°, supply 4.5–20 V, output 3.3 V) so the model is self-documenting without needing a datasheet.
+
+> **Changing the GPIO pin** — update `pipeline:gpioPin` here **and** the `--pin` CLI arg in `docker-compose.yml` for the `producer` service. Both must match.
+
+***
+
+### `models/wastebin.jsonld` — Bin Platforms
+
+Describes each bin as a `sosa:Platform` that hosts a sensor.
+
+```json
+{
+  "@id":   "urn:wastebin:bin-01",
+  "@type": "sosa:Platform",
+  "pipeline:capacity":   50,
+  "pipeline:heightCm":   18,
+  "pipeline:diameterCm": 8,
+  "pipeline:wasteType":  "general",
+  "sosa:hosts": ["urn:dev:team08:pir-01"],
+  "pipeline:locatedIn":  "urn:env:kypes"
+}
+```
+
+`pipeline:capacity` (default: `50`) is the number of disposal events that represents 100% fill. The producer increments fill level relative to this value. Adjust it to match your actual bin size.
+
+***
+
+### `models/context.jsonld` — Shared Context
+
+A standalone context document referenced by all other files so namespace declarations are not repeated. Import it with `"@context": ["./context.jsonld", { ... }]` in any new model file you create.
+
+***
+
+### Adding a New Bin
+
+1. Add a new entry in `wastebin.jsonld` with `"@id": "urn:wastebin:bin-03"` and update `sosa:hosts`.
+2. Add a new sensor entry in `sensor.jsonld` with `"@id": "urn:dev:team08:pir-03"` and the new `pipeline:gpioPin`.
+3. Add the new URNs to `environment.jsonld` under `pipeline:contains` and `pipeline:hostsSensors`.
+4. Start a new producer service in `docker-compose.yml`:
+   ```yaml
+   producer-bin03:
+     build: .
+     command: python3 producer.py --verbose --host mosquitto --bin-id bin-03 --sensor-id pir-03 --pin 22
+   ```
+5. The API's `_build_registries()` globs `models/wastebin*.jsonld` — all new bins are picked up automatically on next restart.
+
+--- 
+
+## 18. Troubleshooting
+
+
+
+
+### Node-RED `sqlite` Node Missing
 
 ```bash
 docker exec -it smartbin-node-red-1 \
@@ -818,42 +984,41 @@ docker exec -it smartbin-node-red-1 \
 docker compose restart node-red
 ```
 
-### Database file not created
-
-The `smartbin.db` is created by `api.py` on first start. Check:
-
-```bash
-docker compose logs api | grep -i "sqlite\|db\|database"
-docker exec -it smartbin-api-1 ls /app/data/
-```
-
-### Cloudflare tunnel shows "Offline"
+### Cloudflare Tunnel Shows "Offline"
 
 ```bash
 sudo systemctl status cloudflared
 sudo journalctl -u cloudflared -n 50
-# Most common fix:
-cloudflared tunnel login   # re-authenticate
+# Most common fix — re-authenticate:
+cloudflared tunnel login
 sudo systemctl restart cloudflared
 ```
 
-### ML model file not found
+### ML Model File Not Found at Startup
 
-The model is baked into the Docker image at build time via `RUN python train_model.py`.
-If the `models_v_s/` volume mount overrides the baked model with an empty directory:
+The model is built into the Docker image via `RUN python train_model.py`. If the
+`models_v_s/` host volume mount overrides the baked model with an empty directory:
 
 ```bash
 ls ./models_v_s/
-# If empty, run:
+# If empty, regenerate:
 docker compose run --rm virtual_sensor_ml python train_model.py
+docker compose restart virtual_sensor_ml
 ```
 
----
+### Home Assistant Entities Not Appearing
 
-## License
+- Confirm the MQTT integration is connected: **Settings → Devices & Services → MQTT**
+- Check that the broker address points to the Pi's IP (not `localhost` from HA's perspective)
+- Force a re-discovery by restarting the producer:
+  ```bash
+  docker compose restart producer
+  ```
+  Discovery payloads are published on every producer startup with `retain=True`.
 
-MIT — see `LICENSE` file.
+
+
 
 ## Team
 
-Team 08 · Internet of Things Lab · 2025–2026
+Team 08 · Advanced Programming techniques  · ECE Upatras · 2025–2026

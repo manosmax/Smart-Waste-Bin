@@ -25,7 +25,6 @@ def parse_iso(ts: str) -> datetime:
     return datetime.fromisoformat(ts.replace("Z", "+00:00"))
 
 
-# MQTT callbacks
 
 def make_on_connect(args: argparse.Namespace):
     def on_connect(client, userdata, flags, reason_code, properties):
@@ -78,7 +77,6 @@ def make_on_message(args: argparse.Namespace):
     return on_message
 
 
-# Entry point
 
 def main() -> None:
     parser = argparse.ArgumentParser(

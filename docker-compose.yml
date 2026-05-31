@@ -118,6 +118,35 @@ services:
     networks:
       - smartbin-net
 
+  node-red:
+    image: nodered/node-red:latest
+    ports:
+      - "1880:1880"
+    volumes:
+      - ./node-red:/data           
+    environment:
+      - TZ=Europe/Athens           
+      - NODE_RED_INSTALL_EXTRA_PACKAGES=node-red-dashboard
+    networks:
+      - smartbin-net
+    depends_on:
+      - mosquitto
+    restart: unless-stopped
+
+homeassistant:
+  image: homeassistant/home-assistant:stable
+  ports:
+    - "8123:8123"
+  volumes:
+    - ./ha-config:/config   
+  environment:
+    - TZ=Europe/Athens
+  networks:
+    - smartbin-net
+  depends_on:
+    - mosquitto
 networks:
   smartbin-net:
     driver: bridge
+
+

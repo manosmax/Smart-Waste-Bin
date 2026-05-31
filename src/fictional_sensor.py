@@ -1,27 +1,3 @@
-"""
-fictional_sensor.py — Simulated PIR sensor for bin-02.
-
-Randomly generates motion events and publishes them to MQTT,
-mirroring the exact payload format of the real producer.py.
-Also sends Home Assistant MQTT Discovery payloads on startup.
-
-Usage:
-    python fictional_sensor.py [options]
-
-    --bin-id        bin-02          Bin identifier
-    --sensor-id     pir-02          Sensor identifier
-    --device-id     urn:dev:team08:pir-02
-    --host          localhost        MQTT broker host
-    --port          1883
-    --qos           1
-    --topic         smartbin/bin-02/pir-02/events
-    --min-interval  3.0             Min seconds between events
-    --max-interval  30.0            Max seconds between events
-    --busy-hours    8,9,10,11,12,13,14,15,17   Comma-separated hours with higher activity
-    --duration      7200.0          Run for this many seconds (0 = forever)
-    --verbose
-"""
-
 import argparse
 import json
 import logging
@@ -84,7 +60,6 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-# ── Home Assistant Discovery ──────────────────────────────────────────────────
 
 def send_discovery(client, bin_id: str, sensor_id: str,
                    pir_topic: str, fill_topic: str, qos: int) -> None:
@@ -128,14 +103,8 @@ def send_discovery(client, bin_id: str, sensor_id: str,
     logger.info("[HA] Discovery sent for %s / %s", bin_id, sensor_id)
 
 
-# ── Interval logic — busier during peak hours ─────────────────────────────────
 
 def get_interval(busy_hours: set, min_iv: float, max_iv: float) -> float:
-    """
-    Return a random sleep interval.
-    During busy hours: uniform between min_iv and min_iv*4.
-    During quiet hours: uniform between min_iv*4 and max_iv.
-    """
     import random
     current_hour = datetime.now().hour
     if current_hour in busy_hours:
@@ -143,7 +112,6 @@ def get_interval(busy_hours: set, min_iv: float, max_iv: float) -> float:
     return random.uniform(min_iv * 4, max_iv)
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
     logging.basicConfig(
@@ -210,7 +178,6 @@ def main() -> None:
     client.on_message    = on_message
     client.on_disconnect = on_disconnect
 
-    # Last-will — mirrors producer.py behaviour
     client.will_set(f"{topic}/status", "offline", qos=qos, retain=True)
     client.reconnect_delay_set(min_delay=1, max_delay=30)
 
@@ -222,7 +189,6 @@ def main() -> None:
 
     client.loop_start()
 
-    # Wait for connection before sending events
     timeout = time.monotonic() + 10
     while not connected["ok"] and time.monotonic() < timeout:
         time.sleep(0.1)
@@ -243,7 +209,6 @@ def main() -> None:
     try:
         while run_forever or (time.time() - start_t) < args.duration:
 
-            # Sleep for a realistic interval before the next event
             interval = get_interval(busy_hours, args.min_interval, args.max_interval)
             time.sleep(interval)
 
