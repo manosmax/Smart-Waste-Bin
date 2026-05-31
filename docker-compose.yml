@@ -148,8 +148,8 @@ services:
       - mosquitto
     restart: unless-stopped
 
-  networks:
-    smartbin-net:
-      driver: bridge  
+networks:
+  smartbin-net:
+    driver: bridge  
 
 
