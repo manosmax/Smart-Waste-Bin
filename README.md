@@ -456,6 +456,19 @@ Here is the corrected **Section 10** for your README, matching your actual Node-
 Node-RED runs at `http://localhost:1880`. The dashboard UI is at `http://localhost:1880/ui`.
 All flows are version-controlled in `node-red/flows.json` and loaded automatically from the mounted volume.
 
+### Installation instructions 
+### Install node-red-dashboard
+1. Open the Node-RED editor.
+2. Click the menu icon (top-right) and select **Manage palette**.
+3. Go to the **Install** tab.
+4. Search exactly for `node-red-dashboard`.
+5. Click **install**.
+
+### Configure Mqtt 
+1. for every node, double click 
+2. on the server field -> pensil 
+3. replace the Server ip with the Pi5s ip 
+
 ### What the Flows Do
 
 | Flow | Subscribes to | Logic | Publishes / Writes |
