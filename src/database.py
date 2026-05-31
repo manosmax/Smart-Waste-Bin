@@ -2,7 +2,7 @@ import sqlite3
 import os
 from datetime import datetime, timezone
 
-DB_PATH = os.environ.get("DB_PATH", "smartbin.db")
+DB_PATH = os.environ.get("DB_PATH", "/app/data/smartbin.db")
 
 
 def get_connection(db_path: str = DB_PATH) -> sqlite3.Connection:

@@ -31,6 +31,9 @@ services:
       --host mosquitto
       --topic smartbin/bin-01/pir-01/events
       --out /app/data/motion_events.jsonl
+      --db /app/data/smartbin.db
+    environment:
+      - DB_PATH=/app/data/smartbin.db
     volumes:
       - ./data:/app/data
     networks:
@@ -62,6 +65,8 @@ services:
     volumes:
       - ./data:/app/data
       - ./models_v_s:/app/models_v_s
+    environment:
+      - DB_PATH=/app/data/smartbin.db
     networks:
       - smartbin-net
     depends_on:
