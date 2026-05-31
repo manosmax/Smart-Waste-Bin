@@ -134,22 +134,22 @@ services:
       - mosquitto
     restart: unless-stopped
 
-homeassistant:
-  image: homeassistant/home-assistant:stable
-  ports:
-    - "8123:8123"
-  volumes:
-    - ./ha-config:/config   
-  environment:
-    - TZ=Europe/Athens
-  networks:
-    - smartbin-net
-  depends_on:
-    - mosquitto
-  restart: unless-stopped
+  homeassistant:
+    image: homeassistant/home-assistant:stable
+    ports:
+      - "8123:8123"
+    volumes:
+      - ./ha-config:/config   
+    environment:
+      - TZ=Europe/Athens
+    networks:
+      - smartbin-net
+    depends_on:
+      - mosquitto
+    restart: unless-stopped
 
-networks:
-  smartbin-net:
-    driver: bridge
+  networks:
+    smartbin-net:
+      driver: bridge  
 
 
