@@ -128,7 +128,7 @@ services:
       - ./node-red:/data    
     environment:
       - TZ=Europe/Athens    
-      - NODE_RED_INSTALL_EXTRA_PACKAGES=node-red-dashboard              
+      - NODE_RED_ENABLE_PROJECTS=false
     networks:
       - smartbin-net
     depends_on:

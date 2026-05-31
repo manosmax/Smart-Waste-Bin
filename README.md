@@ -563,8 +563,8 @@ Upload the csv `day_of_week,hour,is_weekend,event_count,label`
 
 ### Setup Steps
 
-1. Open Home Assistant → **Settings → Devices & Services → Add Integration → MQTT**
-2. Set Broker to `<Raspberry Pi IP address>` or 1``localhost`  and Port to `1883`
+1. Open Home Assistant → **Settings → Devices & Services → MQTT -> three dots -> reconfigure**
+2. Set Broker to `<Raspberry Pi IP address>` and Port to `1883`
 3. Click **Submit** — no username/password needed for the default config
 
 All sensor entities appear **automatically within ~30 seconds** via MQTT Discovery.
