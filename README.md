@@ -28,9 +28,8 @@
 14. [Cloudflare Tunnel (Remote Access)](#14-cloudflare-tunnel-remote-access)
 15. [Configuration Reference](#15-configuration-reference)
 16. [Extending the System (Multi-Bin)](#16-extending-the-system-multi-bin)
-17. [Troubleshooting](#17-troubleshooting)
-
----
+17. [Semantic Models](#17-semantic-models)
+18. [Troubleshooting](#18-troubleshooting)
 
 ## 1. Architecture Overview
 
@@ -816,7 +815,7 @@ virtual_sensor_rules_bin02:
 ***
 
 
-## 17. Semantic Models (JSON-LD)
+## 17. Semantic Models
 
 ```mermaid
 graph TD
