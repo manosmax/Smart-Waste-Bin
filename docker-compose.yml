@@ -125,9 +125,10 @@ services:
     ports:
       - "1880:1880"
     volumes:
-      - ./node-red:/data           
+      - ./node-red:/data    
     environment:
-      - TZ=Europe/Athens           
+      - TZ=Europe/Athens    
+      - NODE_RED_INSTALL_EXTRA_PACKAGES=node-red-dashboard              
     networks:
       - smartbin-net
     depends_on:
