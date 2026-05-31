@@ -1,16 +1,19 @@
-
 import argparse
 import json
 import logging
 import os
 from datetime import datetime, timezone
 
+
 import paho.mqtt.client as mqtt
+
 
 logger = logging.getLogger(__name__)
 
 
+
 # Helpers
+
 
 def utc_now_iso() -> str:
     return (
@@ -20,9 +23,27 @@ def utc_now_iso() -> str:
     )
 
 
-def parse_iso(ts: str) -> datetime:
 
+def parse_iso(ts: str) -> datetime:
     return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+
+
+def get_dated_path(base_path: str) -> str:
+    """Derive a dated sibling file from the base output path.
+
+    e.g. /app/data/motion_events.jsonl
+      -> /app/data/motion_events_2026-05-31.jsonl
+    """
+    root, ext = os.path.splitext(base_path)
+    date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    return f"{root}_{date_str}{ext}"
+
+
+def append_record(path: str, record: dict) -> None:
+    """Ensure directory exists and append one JSON line to path."""
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(record) + "\n")
 
 
 
@@ -37,6 +58,7 @@ def make_on_connect(args: argparse.Namespace):
     return on_connect
 
 
+
 def make_on_message(args: argparse.Namespace):
     def on_message(client, userdata, msg):
 
@@ -46,10 +68,8 @@ def make_on_message(args: argparse.Namespace):
             logger.warning("[CONSUMER] Bad JSON on %s: %s", msg.topic, exc)
             return
 
-
         ingest_ts = utc_now_iso()
         record["ingest_time"] = ingest_ts
-
 
         event_ts_str = record.get("event_time")
         if event_ts_str:
@@ -61,20 +81,25 @@ def make_on_message(args: argparse.Namespace):
             except Exception as exc:
                 logger.debug("[CONSUMER] Could not compute latency: %s", exc)
 
+        # --- Write 1: rolling master file (always appended) ---
+        append_record(args.out, record)
 
-        os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
-        with open(args.out, "a", encoding="utf-8") as f:
-            f.write(json.dumps(record) + "\n")
+        # --- Write 2: daily rotated file (auto-named by UTC date) ---
+        dated_path = get_dated_path(args.out)
+        append_record(dated_path, record)
 
         if args.verbose:
             logger.debug(
-                "[CONSUMER] seq=%-4s  latency=%.1f ms  fill=%s%%",
+                "[CONSUMER] seq=%-4s  latency=%.1f ms  fill=%s%%  files=[%s, %s]",
                 record.get("seq", "?"),
                 record.get("pipeline_latency_ms", float("nan")),
                 record.get("fill_level", "?"),
+                os.path.basename(args.out),
+                os.path.basename(dated_path),
             )
 
     return on_message
+
 
 
 
@@ -89,7 +114,7 @@ def main() -> None:
     parser.add_argument("--topic",   default="smartbin/bin-01/pir-01/events",
                         help="Topic to subscribe to")
     parser.add_argument("--out",     default="/app/data/motion_events.jsonl",
-                        help="Output JSONL file path")
+                        help="Output JSONL file path (a dated copy is also written automatically)")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
@@ -104,13 +129,16 @@ def main() -> None:
     client.reconnect_delay_set(min_delay=1, max_delay=30)
     client.connect(args.host, args.port, keepalive=60)
 
-    logger.info("[CONSUMER] Writing to %s", args.out)
+    dated_path = get_dated_path(args.out)
+    logger.info("[CONSUMER] Writing to master : %s", args.out)
+    logger.info("[CONSUMER] Writing to dated  : %s", dated_path)
 
     try:
         client.loop_forever()
     except KeyboardInterrupt:
         logger.info("\n[CONSUMER] Shutting down.")
         client.disconnect()
+
 
 
 if __name__ == "__main__":
