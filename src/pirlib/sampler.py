@@ -16,7 +16,6 @@ class PirSampler:
     def read(self) -> bool:
         if self._stub:
             return False
-        print(bool(GPIO.input(self.pin))) 
         return bool(GPIO.input(self.pin))
 
     def cleanup(self):
