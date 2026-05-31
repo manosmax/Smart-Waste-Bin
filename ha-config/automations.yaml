@@ -1,0 +1,49 @@
+- id: '1777818364444'
+  alias: 'Motion Alert '
+  description: ''
+  triggers:
+  - trigger: state
+    entity_id:
+    - binary_sensor.smart_waste_bin_bin_01_waste_bin_bin_01_motion
+  conditions: []
+  actions:
+  - action: persistent_notification.create
+    metadata: {}
+    data:
+      message: Motion detected at Smart Wastebin 01 — {{ now().strftime('%H:%M:%S')
+        }}
+      title: Wastebin Alert
+  mode: single
+- id: '1777818928636'
+  alias: 'Alert of overfill '
+  description: ''
+  triggers:
+  - trigger: numeric_state
+    entity_id:
+    - sensor.smart_waste_bin_bin_01_waste_bin_bin_01_items
+    above: 50
+  conditions: []
+  actions:
+  - action: persistent_notification.create
+    metadata: {}
+    data:
+      message: '[ALERT] Number of objects inside bin is above 50 ! '
+      title: OVERFILL
+  mode: single
+- id: '1777822156221'
+  alias: Count motion events
+  description: ''
+  triggers:
+  - trigger: state
+    entity_id:
+    - binary_sensor.smart_waste_bin_bin_01_waste_bin_bin_01_motion
+    to:
+    - 'on'
+  conditions: []
+  actions:
+  - action: counter.increment
+    metadata: {}
+    target:
+      entity_id: counter.wastebin_motion_count
+    data: {}
+  mode: single

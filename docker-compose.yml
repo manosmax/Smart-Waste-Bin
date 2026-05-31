@@ -21,6 +21,7 @@ services:
       - smartbin-net
     depends_on:
       - mosquitto
+    restart: unless-stopped
 
   consumer:
     build: .
@@ -107,6 +108,7 @@ services:
       - smartbin-net
     depends_on:
       - mosquitto
+    restart: unless-stopped
 
   asyncapi-docs:
     build: .
@@ -126,7 +128,6 @@ services:
       - ./node-red:/data           
     environment:
       - TZ=Europe/Athens           
-      - NODE_RED_INSTALL_EXTRA_PACKAGES=node-red-dashboard
     networks:
       - smartbin-net
     depends_on:
@@ -145,6 +146,8 @@ homeassistant:
     - smartbin-net
   depends_on:
     - mosquitto
+  restart: unless-stopped
+
 networks:
   smartbin-net:
     driver: bridge

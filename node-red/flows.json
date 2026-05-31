@@ -237,7 +237,7 @@
         "finalize": "",
         "libs": [],
         "x": 300,
-        "y": 780,
+        "y": 800,
         "wires": [
             [
                 "877d9019306c5a1f",
@@ -512,13 +512,13 @@
         "type": "file",
         "z": "62019e9d552c6d16",
         "name": "",
-        "filename": "/home/iotlab_upat_8/programs/Pie/labs/lab10/data/detected_events.log",
+        "filename": "/data/detected_events.log",
         "filenameType": "str",
         "appendNewline": true,
         "createDir": false,
         "overwriteFile": "false",
         "encoding": "none",
-        "x": 770,
+        "x": 630,
         "y": 720,
         "wires": [
             []
@@ -606,13 +606,5 @@
         "x": 280,
         "y": 880,
         "wires": []
-    },
-    {
-        "id": "6e45919df50c83ee",
-        "type": "global-config",
-        "env": [],
-        "modules": {
-            "node-red-dashboard": "3.6.6"
-        }
     }
 ]
