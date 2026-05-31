@@ -1,0 +1,540 @@
+\documentclass[10pt,a4paper]{article}
+
+\usepackage[top=1in,bottom=1in,left=1in,right=1in]{geometry}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{titlesec}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{fancyhdr}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{float}
+\usepackage{listings}
+\usepackage{amsmath}
+\usepackage{multirow}
+\usepackage{tabularx}
+
+% ---------------------------------------------------------------
+% Colours
+% ---------------------------------------------------------------
+\definecolor{accent}{HTML}{185FA5}
+\definecolor{codebg}{HTML}{F5F5F5}
+\definecolor{codefg}{HTML}{333333}
+
+% ---------------------------------------------------------------
+% Section formatting
+% ---------------------------------------------------------------
+\titleformat{\section}
+{\normalfont\fontsize{11pt}{13pt}\bfseries\color{accent}}
+{\thesection.}{0.5em}{}[\vspace{-4pt}\rule{\linewidth}{0.4pt}\vspace{2pt}]
+
+\titleformat{\subsection}
+{\normalfont\fontsize{10pt}{12pt}\bfseries}
+{\thesubsection.}{0.5em}{}
+
+\titlespacing*{\section}{0pt}{10pt}{4pt}
+\titlespacing*{\subsection}{0pt}{6pt}{2pt}
+
+% ---------------------------------------------------------------
+% Code listings
+% ---------------------------------------------------------------
+\lstset{
+backgroundcolor=\color{codebg},
+basicstyle=\ttfamily\fontsize{8pt}{9.5pt}\selectfont,
+breaklines=true,
+frame=single,
+rulecolor=\color{gray!40},
+framesep=3pt,
+xleftmargin=6pt,
+xrightmargin=6pt,
+}
+
+% ---------------------------------------------------------------
+% Header / footer
+% ---------------------------------------------------------------
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.4pt}
+\fancyhead[L]{\small\color{gray}Smart Wastebin System}
+\fancyhead[R]{\small\color{gray}Final Project Report}
+\fancyfoot[C]{\small\thepage}
+
+% ---------------------------------------------------------------
+% Hyperlinks
+% ---------------------------------------------------------------
+\hypersetup{
+colorlinks=true,
+linkcolor=accent,
+urlcolor=accent,
+citecolor=accent,
+}
+
+% ---------------------------------------------------------------
+% List spacing
+% ---------------------------------------------------------------
+\setlist[itemize]{noitemsep, topsep=2pt, leftmargin=*}
+\setlist[enumerate]{noitemsep, topsep=2pt, leftmargin=*}
+
+% ---------------------------------------------------------------
+% Document
+% ---------------------------------------------------------------
+\begin{document}
+
+% Title block
+\begin{center}
+{\fontsize{14pt}{17pt}\selectfont\bfseries Smart Wastebin System}\\[4pt]
+{\fontsize{10pt}{12pt}\selectfont\color{gray}
+Advanced Programming Techniques --- Final Project Report\\[2pt]
+Project Github Repository:\\[2pt]
+\url{https://github.com/manosmax/Smart-Waste-Bin/}\\[2pt]
+Anastasis Kanellopoulos \textbullet{} AM: 1100882\\[2pt]
+Emmanouil Giakoumakis \textbullet{} AM: 1100838\\[2pt]
+Emmanouil Pasamichalis \textbullet{} AM: 1101001\\[2pt]
+Team 08
+}
+\end{center}
+\vspace{-4pt}
+\rule{\linewidth}{0.6pt}
+\vspace{4pt}
+
+% ---------------------------------------------------------------
+\section{Introduction}
+% ---------------------------------------------------------------
+
+In this course, we explored a broad range of concepts and practices related to modern software development and system integration. We began by implementing team synchronization workflows using GitHub, while also emphasizing the importance of documentation and isolated development environments to improve reproducibility and collaboration.
+
+Subsequently, we focused on containerization techniques and the semantic modeling of the Smart Wastebin System using JSON-LD. The course also introduced several low-code platforms, including \textit{Home Assistant} and \textit{Node-RED}, which were utilized for workflow automation. In addition, we implemented MQTT-based communication, virtual sensors, and the integration of \textit{REST} and \textit{Async} API.
+
+The objective of this project is to design and implement a \textit{Smart Wastebin System}
+that transforms an ordinary waste bin into a data-producing edge device capable of
+monitoring its own state, reporting occupancy in real time, and predicting future usage
+patterns so that collection can be optimised.
+
+The system is built around a Raspberry~Pi fitted with an HC-SR501 passive infrared (PIR)
+motion sensor mounted on the back wall of the bin body. Every time the sensor detects motion, a
+\textit{detected event} is recorded. Cumulative event counts are converted into a
+fill-level percentage and published to downstream consumers via a Mosquitto MQTT broker.
+Two virtual sensors extend raw event data into higher-level signals: a rule-based sensor
+classifies current usage intensity into four ordered levels (\textit{idle}, \textit{low},
+\textit{medium}, \textit{high}), while a machine-learning sensor predicts whether the
+next hour will be \textit{busy} or \textit{quiet}. A Flask-RESTx REST API exposes the
+system state to HTTP clients, and a Home Assistant integration surfaces all sensor
+entities on a live dashboard.
+
+The project follows the DIKW (Data--Information--Knowledge--Wisdom) model:
+
+\begin{itemize}
+\item Raw GPIO pulses (data).
+\item Structured JSON-LD observations (information).
+\item Virtual sensors that generate predictions (knowledge).
+\item Informed collection decisions (wisdom).
+\end{itemize}
+
+% ---------------------------------------------------------------
+\section{Approach}
+% ---------------------------------------------------------------
+
+\subsection{System Architecture}
+
+The system is structured as a \textbf{ten-service} Docker Compose application, which makes starting all parts of the project with a single command feasible. Every service communicates exclusively through the Mosquitto MQTT broker, implementing a strict publish--subscribe separation that allows for superior extensibility and maintainability. Node-RED and Home Assistant join the Python services as first-class containerised members of the Compose stack, ensuring that the full platform --- from GPIO sensing to live dashboard --- launches with a single \texttt{docker compose up {-}{-}build}.
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Service} & \textbf{Role} & \textbf{Key technology} \\
+\midrule
+\texttt{mosquitto}            & Message broker                   & Eclipse Mosquitto 2 \\
+\texttt{producer}             & Sensor reading + publishing      & lgpio, paho-mqtt \\
+\texttt{consumer}             & Event logging                    & paho-mqtt, JSONL \\
+\texttt{api}                  & REST + MQTT bridge + SQLite      & Flask-RESTx, SQLite \\
+\texttt{train\_model}         & ML model training on startup     & scikit-learn, joblib \\
+\texttt{virtual\_sensor\_rules} & Rule-based usage level         & Python deque \\
+\texttt{virtual\_sensor\_ml}  & Busy/quiet prediction            & scikit-learn \\
+\texttt{fictional\_sensor}    & Simulated second bin (bin-02)    & paho-mqtt \\
+\texttt{upload}               & CSV upload + visualisation       & Flask, Seaborn \\
+\texttt{asyncapi-docs}        & AsyncAPI YAML static server      & Python HTTP server \\
+\texttt{node-red}             & Low-code flow automation + UI    & Node-RED, Dashboard \\
+\texttt{homeassistant}        & Live sensor dashboard            & Home Assistant \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Sensing Layer --- \texttt{pirlib}}
+
+\texttt{PirSampler} uses
+\texttt{lgpio} to poll GPIO~BCM-17 at 10\,Hz;
+\texttt{PirInterpreter}
+implements debouncing and event deduplication: a motion event is emitted only when the
+GPIO signal has been continuously HIGH for at least 0.5\,s and a configurable cooldown
+period (default 5\,s) has elapsed since the last emission.
+
+\subsection{Producer}
+
+The producer runs two threads: a \textit{producer loop} that drives the pirlib pipeline
+and assembles JSON-LD \texttt{sosa:Observation} records, and a \textit{publisher loop}
+that drains an in-process queue (max 100 entries) and forwards records to three MQTT
+topics: the full telemetry topic, a simplified motion state topic for Home~Assistant,
+and a fill-level state topic. A persistent state file (\texttt{sensor\_state.json})
+ensures that \texttt{item\_count} and \texttt{fill\_level} maintains information in container restarts.
+Fill level is calculated as:
+
+\[
+\text{fill\_level} = \min\!\left(\left\lfloor\frac{\text{item\_count}}{50} \times 100\right\rfloor,\ 100\right)
+\]
+
+where 50 is the defined bin capacity.
+
+\subsection{Consumer}
+
+The consumer subscribes to the telemetry topic and enriches each record with two
+fields --- \texttt{ingest\_time} and \texttt{pipeline\_latency\_ms} --- before appending
+the completed record as a JSONL line. This enrichment fullfills the AsyncAPI specification.
+
+\subsection{SQLite Database}
+
+The system transitions from append-only JSONL log files to a structured, relational SQLite database (\texttt{smartbin.db}), initialised automatically by the API on first start. The schema is designed for multi-bin deployments from the outset: every table is keyed by \texttt{bin\_id}, and new bins register themselves via \texttt{INSERT OR IGNORE} / \texttt{ON CONFLICT DO UPDATE} upserts the first time an event arrives, without requiring schema migrations.
+
+The schema comprises five tables:
+
+\begin{itemize}
+\item \textbf{\texttt{Bins}} --- registry of all deployed waste bins (id, URI, name, location, status).
+\item \textbf{\texttt{Sensors}} --- registry of all sensors (id, URI, type, model, status).
+\item \textbf{\texttt{Mounted\_On}} --- many-to-many join between sensors and bins with a mounting timestamp.
+\item \textbf{\texttt{PIR\_Events}} --- one row per detected motion event, storing the full JSON-LD fields (\texttt{event\_id}, \texttt{motion\_state}, \texttt{fill\_level}, \texttt{item\_count}, \texttt{seq}, \texttt{run\_id}, \texttt{pipeline\_latency\_ms}).
+\item \textbf{\texttt{Bin\_Usage}} --- an aggregated \texttt{(bin\_id, day\_of\_week, hour)} $\to$ \texttt{usage\_count} table that is atomically incremented on every \texttt{insert\_pir\_event()} call using \texttt{ON CONFLICT DO UPDATE SET usage\_count = usage\_count + 1}. This pre-aggregated structure makes peak-hour and heatmap queries $O(1)$ regardless of event volume.
+\item \textbf{\texttt{MQTT\_Messages}} --- a full audit log of all MQTT traffic passing through the API, including topic, raw payload, QoS, retained flag, and receive timestamp.
+\end{itemize}
+
+Three parameterised SQL query constants (\texttt{QUERY\_PEAK\_HOUR}, \texttt{QUERY\_LEAST\_HOUR}, \texttt{QUERY\_WEEKLY\_HEATMAP}) are defined in \texttt{database.py} and used directly by the API endpoints, keeping query logic co-located with the schema rather than scattered across route handlers.
+
+\subsection{Semantic Data Model}
+
+All entities are described in JSON-LD using the SOSA/SSN ontology. Four model files
+define the wastebin (\texttt{urn:wastebin:bin-01}, type \texttt{sosa:Platform}),
+the sensor (\texttt{urn:dev:team08:pir-01}, type \texttt{sosa:Sensor}), the deployment
+environment (\texttt{urn:env:kypes}, type \texttt{bot:Space}), and a shared context
+file. Two bins and two sensors are modelled (\texttt{bin-01}/\texttt{pir-01} on GPIO~17 and \texttt{bin-02}/\texttt{pir-02} on GPIO~27), with the environment file linking both via \texttt{pipeline:contains} and \texttt{pipeline:hostsSensors}.
+
+\subsection{MQTT Topic Structure}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}lXl@{}}
+\toprule
+\textbf{Topic} & \textbf{Payload} & \textbf{Retained} \\
+\midrule
+\texttt{smartbin/bin-01/pir-01/events} & Full JSON-LD observation & No \\
+\texttt{smartbin/bin-01/pir-01/motion} & \texttt{detected} / \texttt{clear} & No \\
+\texttt{smartbin/bin-01/fill-level/state} & Fill percentage (string) & No \\
+\texttt{smartbin/bin-01/pir-01/events/status}& \texttt{online} / \texttt{offline} (LWT) & Yes \\
+\texttt{smartbin/bin-01/command} & Empty-bin command (JSON) & No \\
+\texttt{smartbin/bin-01/status} & Bin state after emptying & Yes \\
+\texttt{smartbin/bin-01/usage} & Usage level + event count & Yes \\
+\texttt{smartbin/bin-01/usage/nodered} & Node-RED computed usage & Yes \\
+\texttt{smartbin/bin-01/alerts} & Fill / usage alert payload & Yes \\
+\texttt{smartbin/bin-01/prediction} & Busy/quiet + confidence & Yes \\
+\texttt{smartbin/bin-01/nodered/heartbeat} & Node-RED keepalive (60\,s) & No \\
+\texttt{homeassistant/.../config} & HA MQTT Discovery ($\times$4) & Yes \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{REST API}
+
+The Flask-RESTx API exposes three namespaces under \texttt{localhost:5000}:
+\texttt{/bins} (list, detail, events, empty, emptied-history, peak-hour, hourly-activity, usage data CSV export),
+\texttt{/sensors} (list, detail, events), and
+\texttt{/mqtt} (publish, topics, topic detail, subscribe, messages).
+An \texttt{emptied} command triggers an MQTT message to the producer, resets the
+fill level to zero, and persists the record in SQLite. The Swagger UI at the root
+documents all endpoints automatically. An AsyncAPI 3.0 specification documents the
+parallel push-based interface, served as a static site at port~5002.
+
+\subsection{Virtual Sensors}
+
+\textbf{Rule-based sensor.} A \texttt{collections.deque} maintains a rolling window of
+UTC timestamps for all detected events. Every 30 seconds the window is pruned to the
+last 10 minutes and the surviving count is classified:
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Level} & \textbf{Event count} & \textbf{Condition} \\
+\midrule
+Idle   & 0    & \texttt{count == 0} \\
+Low    & 1--3 & \texttt{0 < count <= 3} \\
+Medium & 4--10 & \texttt{3 < count <= 10} \\
+High   & 11+  & \texttt{count > 10} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{ML-based sensor.} A \texttt{RandomForestClassifier} (50 estimators) is trained
+on 30 days of synthetic hourly event data that encodes realistic usage patterns:
+lunch-hour and morning peaks on weekdays, depressed rates on weekends. Features are
+\texttt{hour}, \texttt{day\_of\_week}, and \texttt{is\_weekend}. Every 60\,s the sensor
+predicts whether \textit{the next hour} will be \textit{busy} or \textit{quiet} and
+publishes a payload that includes the class label, the probability-derived confidence
+score, and the feature vector used. Achieved accuracy on a held-out 20\,\% split:
+
+\begin{center}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Class} & \textbf{Precision} & \textbf{Recall} & \textbf{F1} & \textbf{Support} \\
+\midrule
+busy  & 0.84 & 0.94 & 0.89 & 34  \\
+quiet & 0.98 & 0.95 & 0.96 & 110 \\
+\midrule
+\textbf{Accuracy} & \multicolumn{3}{c}{0.94} & 144 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+This is just an approximation for model training purposes which does not represent the abnormalities that would be present in a real world scenario. In the future, the bin can be trained on its own data to represent more accurate usage patterns.
+
+\subsection{Node-RED Integration}
+
+Node-RED runs as a dedicated container on port~1880 within the same Docker Compose network, subscribing directly to the Mosquitto broker via the \texttt{mosquitto} Docker service name. This keeps the Python codebase entirely unchanged: Node-RED participates as an additional MQTT subscriber, adding higher-level automation and a graphical UI without modifying any existing service.
+
+The flow topology mirrors the processing visible in the editor:
+
+\begin{itemize}
+\item Two \textbf{MQTT-in} nodes subscribe to \texttt{smartbin/bin-01/pir-01/events} and \texttt{smartbin/bin-01/pir-01/motion}. Both feed a \textbf{switch} node that routes \texttt{detected} states to the main processing function and \texttt{clear} states to a dedicated debug output.
+\item \textbf{Function~1} implements the same 10-minute rolling window as \texttt{virtual\_sensor\_rules.py} using a per-flow \texttt{flow.set()} array, classifying events into \textit{idle} / \textit{low} / \textit{medium} / \textit{high}. All derived data (usage level, fill level, alert payload, log line) is attached to the message object and fanned out to downstream nodes simultaneously.
+\item A \textbf{highNotification} switch fires only when \texttt{level === ``high''}, triggering \textbf{POST\_ALERT} which builds an HTTP POST to \texttt{api:5000/mqtt/publish}, ensuring that high-usage alerts are also persisted to the \texttt{MQTT\_Messages} SQLite table via the REST API.
+\item A \textbf{file} node appends a structured line to \texttt{/app/data/detected\_events.log} on every detected event.
+\item Two \textbf{Node-RED Dashboard} (\texttt{node-red-dashboard}) nodes surface the data to a browser GUI at \texttt{http://localhost:1880/ui}: a \textbf{gauge} displaying the rolling event count (0--20, with green/yellow/red colour bands at thresholds 4 and 11), and a \textbf{text} widget showing the current classification level.
+\item An \textbf{inject} node fires every 60\,s, passes through \textbf{Function~2}, and publishes a keepalive heartbeat to \texttt{smartbin/bin-01/nodered/heartbeat}.
+\end{itemize}
+
+The \texttt{node-red-dashboard} package is installed automatically via the \texttt{NODE\_RED\_INSTALL\_EXTRA\_PACKAGES} environment variable in \texttt{docker-compose.yml}, requiring no manual \texttt{npm install} step for new deployments.
+
+Flow logic is governed by a global configuration object in \texttt{node-red/settings.js} (\texttt{fillThreshold}, \texttt{usageWindow}, \texttt{apiBase}), so all function nodes read from a single source of truth rather than hardcoded values.
+
+\subsection{Home Assistant Integration}
+
+Home Assistant runs as a containerised service on port~8123 using the official \texttt{homeassistant/home-assistant:stable} image. It is co-located on the \texttt{smartbin-net} Docker bridge network, allowing it to connect to the Mosquitto broker using the service hostname rather than an IP address.
+
+On first boot, Home Assistant presents a one-time onboarding wizard to create the admin account. After that single setup step, all sensor entities appear \textit{automatically} through two complementary mechanisms:
+
+\begin{enumerate}
+\item \textbf{MQTT Discovery.} The \texttt{producer} and \texttt{virtual\_sensor\_rules} services publish retained discovery payloads to \texttt{homeassistant/.../config} topics on every connect. Home Assistant processes these payloads and creates the corresponding entities within 30 seconds of \texttt{docker compose up} completing.
+\item \textbf{Package files.} The version-controlled \texttt{ha-config/packages/} directory is loaded automatically via \texttt{!include\_dir\_named} in \texttt{configuration.yaml}. Two package files (\texttt{smartbin\_mqtt.yaml} and \texttt{smartbin\_automations.yaml}) define all entities explicitly as a fallback and provide four pre-written automations (full-bin notification, alert auto-dismiss, high-usage alert, ML busy-hour warning), all shipped in the \texttt{enabled: false} state so they do not fire unexpectedly for new users.
+\end{enumerate}
+
+The six auto-discovered entities are:
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Entity} & \textbf{Type} & \textbf{State topic} \\
+\midrule
+\texttt{binary\_sensor.waste\_bin\_motion}  & Binary sensor & \texttt{.../pir-01/motion} \\
+\texttt{sensor.waste\_bin\_fill\_level}     & Sensor (\%)   & \texttt{.../fill-level/state} \\
+\texttt{sensor.waste\_bin\_usage\_level}    & Sensor        & \texttt{.../usage} \\
+\texttt{sensor.waste\_bin\_motion\_count}   & Sensor        & \texttt{.../usage} \\
+\texttt{sensor.waste\_bin\_prediction}      & Sensor        & \texttt{.../prediction} \\
+\texttt{binary\_sensor.waste\_bin\_alert}   & Binary sensor & \texttt{.../alerts} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% ---------------------------------------------------------------
+\section{Milestones}
+% ---------------------------------------------------------------
+
+\subsection{Milestone 1 --- Project Foundation}
+
+A GitHub repository was created with a structured layout separating source code
+(\texttt{src/}), semantic models (\texttt{models/}), ML artefacts (\texttt{models\_v\_s/}),
+and documentation (\texttt{docs/}). An initial \texttt{README.md} documents setup,
+run instructions, and design decisions. The development workflow was standardised
+around reproducible and documentable environment and includes \texttt{requirements.txt} for improved dependency installation and organization.
+
+\subsection{Milestone 2 --- PIR Sensor Integration}
+
+The HC-SR501 sensor was connected to BCM GPIO~17. The \texttt{pirlib} mini-library
+provides a clean interface: \texttt{PirSampler} isolates lgpio, and
+\texttt{PirInterpreter} filters noise through configurable \texttt{min\_high} and
+\texttt{cooldown} parameters. A JSONL logger writes raw observations to disk.
+The library degrades gracefully to a stub on non-Pi hardware, enabling development
+without physical hardware.
+
+\subsection{Milestone 3 --- Modular Pipeline}
+
+The monolithic script was decomposed into distinct components: \texttt{pirlib}
+(sensing), \texttt{producer.py} (buffering and publishing), \texttt{consumer.py}
+(subscribing and logging), and \texttt{api.py} (querying). An in-process thread-safe
+\texttt{Queue} with bounded capacity separates the sensing rate from the publish rate,
+providing back-pressure and preventing memory exhaustion.
+
+\subsection{Milestone 4 --- Docker Containerisation}
+
+A single \texttt{Dockerfile} builds all Python services from a common \texttt{python:3.11-slim}
+base. The image bakes the trained ML model (\texttt{RUN python train\_model.py}) to
+avoid a runtime \texttt{FileNotFoundError}. Docker Compose orchestrates all services with appropriate dependency ordering, volume mounts for shared data persistence,
+device passthrough for GPIO, and environment variable injection. Node-RED and Home Assistant join the stack as pre-built images, with their configuration directories version-controlled and mounted as volumes so the entire platform starts in a known, reproducible state with \texttt{docker compose up -{}-build}.
+
+\subsection{Milestone 5 --- JSON-LD Semantic Models}
+
+Four JSON-LD files describe the system's entities using the SOSA/SSN vocabulary. The
+wastebin is a \texttt{sosa:Platform} that hosts the sensor; the sensor is a
+\texttt{sosa:Sensor} with properties modelling detection range, GPIO pin, and operating
+parameters; the environment is a \texttt{bot:Space}. A shared context file maps all
+pipeline-specific field names (e.g.\ \texttt{fill\_level}, \texttt{item\_count},
+\texttt{pipeline\_latency\_ms}) to RDF predicates under a dedicated namespace. Every
+runtime observation record embeds this context, making events interpretable as Linked
+Data. Both deployed bins and both sensors are described in the model files, with the environment file linking them via \texttt{pipeline:contains} and \texttt{pipeline:hostsSensors}.
+
+\subsection{Milestone 6 --- MQTT Communication}
+
+Eclipse Mosquitto replaced in-process communication. The producer and consumer were
+split into standalone processes that share no memory and communicate only through the
+broker. A topic hierarchy was designed around
+\texttt{smartbin/\{bin\_id\}/\{sensor\_id\}/...} to allow multi-bin deployments by
+changing a single configuration parameter. MQTT Last Will and Testament (LWT) provides
+automatic offline detection. All messages use QoS~1; retained messages are used for
+discovery configs, status, usage, and prediction topics.
+
+\subsection{Milestone 8 --- REST API and AsyncAPI Documentation}
+
+Flask-RESTx added a pull-based API alongside the push-based MQTT interface. Swagger UI
+at the root provides interactive documentation generated from Python model definitions.
+The \texttt{/bins/\{id\}/empty} endpoint demonstrates bidirectional integration: an HTTP
+\texttt{POST} triggers an MQTT command that propagates through the broker to the
+producer, resets the physical state, and publishes an updated fill level. An AsyncAPI
+3.0 YAML specification formally documents all MQTT channels, messages, and operations,
+satisfying the requirement for dual interface documentation.
+
+\subsection{Milestone 9 --- Virtual Sensors and Edge Processing}
+
+Two virtual sensors implement the two canonical approaches to CEP over sensor streams.
+The rule-based sensor uses a sliding-window deque as a memory-efficient windowed
+operator, directly analogous to the CEP windowed operators described in the course
+lectures. The ML sensor applies a Random Forest to predict future usage, demonstrating
+that the same MQTT telemetry stream can feed both reactive (rule-based) and predictive
+(ML) consumers simultaneously without modifying the producer. Both sensors publish MQTT
+Discovery payloads on connect, making their entities appear automatically in Home
+Assistant without manual configuration.
+
+\subsection{Milestone 10 --- Node-RED}
+
+Node-RED integration keeps the Python structure entirely intact by operating purely via the pub/sub bus. It runs as a dedicated Docker Compose service (\texttt{nodered/node-red:latest}), connects to the shared Mosquitto broker over the internal Docker network, and subscribes to the same topics as the Python consumer. Because it never imports Python modules or calls internal APIs, adding or removing Node-RED has no effect on any other service.
+
+The integration delivers three capabilities not present in the Python layer: a \textbf{browser-accessible dashboard} (\texttt{/ui}) with a live gauge and usage-level text widget; an independent \textbf{high-usage alert pipeline} that sends HTTP POSTs to the REST API when usage is classified as \textit{high}, ensuring alerts are also recorded in SQLite; and a \textbf{file logging} node that appends a structured human-readable line to \texttt{detected\_events.log} on every event. A 60-second heartbeat inject keeps the broker informed that Node-RED is alive. All thresholds and broker coordinates are centralised in a \texttt{functionGlobalContext} config block in \texttt{settings.js} so they can be changed without editing any function node code.
+
+\subsection{Beyond the Milestones}
+
+Several extensions were implemented beyond the required scope:
+
+\begin{itemize}
+\item \textbf{State persistence.} Producer state (\texttt{item\_count},
+\texttt{fill\_level}) is persisted atomically to a JSON file on every event,
+so container restarts do not silently reset the fill level.
+
+\item \textbf{Cloudflare tunneling integration.} Cloudflare Tunnel was added as a real-world deployment extension that gives the system a public HTTPS presence without a static IP or open router ports. The tunnel client (\texttt{cloudflared}) runs as a \texttt{systemd} service on the Raspberry~Pi and maintains a persistent outbound connection to the Cloudflare edge, through which inbound HTTPS traffic is forwarded to local services. A built-in SSL certificate authenticates the domain and encrypts all traffic. The main domain, \texttt{smart-wastebin.com}, is partitioned into four distinct subdomains:
+
+\begin{itemize}
+\item \texttt{ha.smart-wastebin.com} --- Home Assistant dashboard (port 8123).
+\item \texttt{api.smart-wastebin.com} --- Swagger UI and REST API (port 5000).
+\item \texttt{upload.smart-wastebin.com} --- Training data upload and visualisation (port 5001).
+\item \texttt{asyncapi.smart-wastebin.com} --- AsyncAPI documentation (port 5002).
+\end{itemize}
+
+This subdomain partitioning means each service is independently reachable, independently cacheable at the Cloudflare edge, and independently revocable without affecting the others. The tunnel configuration file (\texttt{.cloudflared/config.yml}) is \textit{not} committed to the repository; only the safe placeholder \texttt{config.yml.example} is version-controlled, preventing accidental exposure of the tunnel UUID and credentials.
+
+\item \textbf{Relational SQLite database.} The system migrated from append-only JSONL flat files to a normalised SQLite schema. The key architectural decision was the \texttt{Bin\_Usage} aggregate table, which is atomically incremented on every event insertion using \texttt{ON CONFLICT DO UPDATE SET usage\_count = usage\_count + 1}. This means that the peak-hour, least-hour, and weekly heatmap queries execute in constant time regardless of how many events have been recorded, because the aggregation happens at write time rather than query time. The schema is multi-bin from the outset: every table is keyed by \texttt{bin\_id}, and new bins self-register via upserts without any schema migration.
+
+\item \textbf{Pipeline latency telemetry.} The consumer computes and appends
+\texttt{pipeline\_latency\_ms} to every persisted record, providing
+end-to-end observability from sensor event to storage.
+
+\item \textbf{Fictional sensor (bin-02).} A \texttt{fictional\_sensor.py} service simulates a second bin (\texttt{bin-02}, \texttt{pir-02}) by generating synthetic MQTT events according to a configurable inter-arrival distribution. This validates that the entire pipeline --- database, API, virtual sensors, Node-RED, and Home Assistant --- handles multiple bins without code changes, relying solely on the parameterised topic hierarchy and the self-registering database upserts.
+\end{itemize}
+
+% ---------------------------------------------------------------
+\section{Conclusions}
+% ---------------------------------------------------------------
+
+The Smart Wastebin System demonstrates that limited hardware, open-source
+middleware, and a well-structured software pipeline can transform a passive physical
+object into a semantically rich data source. The publish--subscribe architecture proved
+its value repeatedly by the ease of extensibility it offered throughout the project: all virtual sensors, the Node-RED dashboard, and the Home Assistant integration were added without modifying the producer or consumer, and the REST API was layered on without disrupting the MQTT pipeline.
+
+The comparison between the rule-based and ML virtual sensors highlights the complementary nature of the two approaches. The rule-based sensor
+reacts to current conditions without needing training data, making it
+ideal in novel scenarios such as a bin being relocated or an unexpected event.
+The ML sensor, in contrast, leverages historical patterns to generate \textit{predictive} signals that offer more advanced pickup scheduling decisions, but its performance can deteriorate when usage patterns change, hence necessitating periodic retraining for optimal functionality. The \texttt{Bin\_Usage} aggregate table makes this retraining loop practical: per-bin training data can be exported directly from the database via the \texttt{/bins/\{id\}/usage/data} endpoint, uploaded through the web interface at port~5001, and the retrained model hot-swapped without restarting the full stack.
+
+The addition of Node-RED as a low-code automation layer demonstrates the value of strict separation between the data bus and the processing layer. Because every service communicates exclusively through MQTT topics, Node-RED could be introduced, modified, and extended without a single line of Python changing. The same principle applies to Home Assistant: the MQTT Discovery mechanism means the dashboard self-configures purely from the metadata the producer publishes, making the system genuinely plug-and-play for new deployments.
+
+\textbf{Possible extensions} include:
+
+\begin{itemize}
+\item \textbf{Multi-bin deployment.} The topic hierarchy
+\texttt{smartbin/\{bin\_id\}/...} is already parameterised; deploying a second
+bin requires only a configuration change and the existing broker, consumer,
+and API handle it without code modification. The database self-registers new bins
+on first event, and the Node-RED wildcard subscription \texttt{smartbin/+/+/events}
+captures all bins automatically.
+\item \textbf{Additional sensor fusion.} A weight sensor or ultrasonic distance
+sensor would provide a direct, hardware-level fill measurement to cross-validate
+the event-count proxy, and a microphone or noise sensor could detect the
+presence of nearby crowds to contextualise usage spikes.
+\item \textbf{Anomaly detection.} A third virtual sensor could compare the ML
+prediction against the rule-based observation in real time. Sustained
+disagreement would signal either a concept drift (the model needs retraining)
+or an unusual real-world event requiring human investigation.
+\item \textbf{Digital twin.} The JSON-LD semantic model already provides the
+structural foundation for a digital twin. Linking the runtime state to the
+static ontology would enable querying the bin's history through a SPARQL
+endpoint, opening the data to cross-system integration. The \texttt{Bin\_Usage}
+heatmap and the \texttt{PIR\_Events} time-series together constitute the
+temporal dimension of such a twin.
+\end{itemize}
+
+In summary, the project successfully meets all required milestones and extends beyond
+them in persistence, observability, and system integration. The layered architecture ---
+sensing, buffering, messaging, modelling, inference, API, low-code automation, and dashboard --- reflects the
+full IoT data pipeline from physical signal to actionable insight.
+
+\section*{Sources}
+
+\begin{itemize}
+\item Home Assistant Documentation: \\
+\texttt{https://www.home-assistant.io/docs/}
+
+\item SQLite Documentation: \\
+\texttt{https://www.sqlite.org/docs.html}
+
+\item Swagger OpenAPI Documentation: \\
+\texttt{https://swagger.io/specification/}
+
+\item AsyncAPI Documentation: \\
+\texttt{https://www.asyncapi.com/docs}
+
+\item MQTT Protocol Specification: \\
+\texttt{https://mqtt.org/}
+
+\item Node-RED Documentation: \\
+\texttt{https://nodered.org/docs/}
+
+\item Node-RED Dashboard: \\
+\texttt{https://flows.nodered.org/node/node-red-dashboard}
+
+\item Project Instructions: \\
+\texttt{https://gbouloukakis.com/courses/ck801-s26/projects/}
+
+\item Course Page: \\
+\texttt{https://eclass.upatras.gr/courses/EE1146/}
+
+\item Cloudflare Tunnel: \\
+\texttt{https://developers.cloudflare.com/tunnel/}
+\end{itemize}
+
+\textbf{Project Github Repository:}\\[2pt] \url{https://github.com/manosmax/Smart-Waste-Bin/}\\[2pt]
+
+\end{document}
