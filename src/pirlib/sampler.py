@@ -11,7 +11,7 @@ class PirSampler:
         self._stub = not _GPIO_AVAILABLE
         if not self._stub:
             GPIO.setmode(GPIO.BCM)
-            GPIO.setup(pin, GPIO.IN)
+            GPIO.setup(pin, GPIO.IN,pull_up_down=GPIO.PUD_DOWN)
 
     def read(self) -> bool:
         if self._stub:
