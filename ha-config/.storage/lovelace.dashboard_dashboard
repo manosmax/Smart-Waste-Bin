@@ -18,7 +18,7 @@
                 },
                 {
                   "type": "markdown",
-                  "content": "Status: Bin-01 {{ '🟢 Online' if states('binary_sensor.smart_waste_bin_bin_01_waste_bin_bin_01_motion') not in ['unavailable', 'unknown'] else '🔴 Offline' }}\n\nStatus: Bin-02 {{ '🟢 Online' if states('binary_sensor.smart_waste_bin_bin_02_waste_bin_bin_02_motion') not in ['unavailable', 'unknown'] else '🔴 Offline' }}\n\n\nAll bins: {{ '🟢 Online' if states('binary_sensor.smart_waste_bin_bin_01_waste_bin_bin_01_motion') not in ['unavailable', 'unknown'] and states('binary_sensor.smart_waste_bin_bin_02_waste_bin_bin_02_motion') not in ['unavailable', 'unknown']else '🔴 Offline' }}\n",
+                  "content": "Status: Bin-01 {{ '🟢 Online' if states('binary_sensor.smart_waste_bin_bin_01_waste_bin_bin_01_pir_01_motion') not in ['unavailable', 'unknown'] else '🔴 Offline' }}\n\nStatus: Bin-02 {{ '🟢 Online' if states('binary_sensor.smart_waste_bin_bin_02_virtual_waste_bin_bin_02_motion') not in ['unavailable', 'unknown'] else '🔴 Offline' }}\n\n\nAll bins: {{ '🟢 Online' if states('binary_sensor.smart_waste_bin_bin_01_waste_bin_bin_01_pir_01_motion') not in ['unavailable', 'unknown'] and states('binary_sensor.smart_waste_bin_bin_02_virtual_waste_bin_bin_02_motion') not in ['unavailable', 'unknown']else '🔴 Offline' }}\n",
                   "title": "Summary",
                   "grid_options": {
                     "rows": 5,
@@ -29,7 +29,7 @@
                   "type": "entities",
                   "entities": [
                     {
-                      "entity": "binary_sensor.smart_waste_bin_bin_01_waste_bin_bin_01_motion"
+                      "entity": "binary_sensor.smart_waste_bin_bin_01_waste_bin_bin_01_pir_01_motion"
                     }
                   ],
                   "grid_options": {
@@ -41,7 +41,7 @@
                   "type": "entities",
                   "entities": [
                     {
-                      "entity": "binary_sensor.smart_waste_bin_bin_02_waste_bin_bin_02_motion"
+                      "entity": "binary_sensor.smart_waste_bin_bin_02_virtual_waste_bin_bin_02_motion"
                     }
                   ],
                   "grid_options": {
@@ -92,10 +92,6 @@
                       "entity": "counter.wastebin_motion_count"
                     }
                   ]
-                },
-                {
-                  "type": "tile",
-                  "entity": "binary_sensor.rpi_power_status"
                 }
               ],
               "column_span": 4
@@ -110,7 +106,7 @@
                 },
                 {
                   "type": "gauge",
-                  "entity": "sensor.smart_waste_bin_bin_02_waste_bin_bin_02_fill_level"
+                  "entity": "sensor.smart_waste_bin_bin_02_virtual_waste_bin_bin_02_fill_level"
                 }
               ],
               "column_span": 4
