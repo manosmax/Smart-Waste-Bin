@@ -29,7 +29,7 @@ services:
       python consumer.py
       --verbose
       --host mosquitto
-      --topic smartbin/#
+      --topic "smartbin/+/+/events"
       --out /app/data/motion_events.jsonl
       --db /app/data/smartbin.db
     environment:
