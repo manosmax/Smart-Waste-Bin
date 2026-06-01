@@ -481,15 +481,31 @@ Upload the csv `day_of_week,hour,is_weekend,event_count,label`
 
 ### Setup Steps
 #### Login page  
-username : anastasis
-password : 12345678
+Create a new account with your own username and password. After connection you should be at the created 
+dashboard for the 2 sensors.  
 
 #### Configuration 
+At this moment all sensors will be uknown as you haven't connected to the MQTT broker yet. 
 1. Open Home Assistant → **Settings → Devices & Services → MQTT -> three dots -> reconfigure**
 2. Set Broker to `<Raspberry Pi IP address>` and Port to `1883`
 3. Click **Submit** — no username/password needed for the default config
 
-All sensor entities appear **automatically within ~30 seconds** via MQTT Discovery.
+All sensor entities should appear **automatically within ~30 seconds** via MQTT Discovery. If a sensor has been triggered but does not appear on your dashboard, the Entity ID in Home Assistant likely mismatched your dashboard configuration.
+
+Follow these steps to cross-check and fix the entity names in case the above doesn't happen:
+
+### Step 1: Find the Correct Entity ID
+1. Navigate to **Settings** -> **Devices & Services** -> **MQTT**.
+2. Click on **Entities** and search for your sensor (e.g., `pir-01 Motion`).
+3. Left-click the entity, then click the **Settings (gear icon)** in the top-right corner.
+4. Note down the exact **Entity ID** (e.g., `binary_sensor.smart_waste_bin_bin_01_waste_bin_bin_01_pir_01_motion`).
+
+### Step 2: Verify and Fix the Dashboard
+1. Go to your default Dashboard page.
+2. Click the three dots in the top-right corner and select **Edit Dashboard**.
+3. Locate the card or GUI element for the missing sensor and click **Edit**.
+4. Cross-check the assigned entity name. Ensure it **exactly matches** the Entity ID you found in Step 1.
+5. Save changes and refresh the page.
 
 ### Auto-Discovered Entities
 
