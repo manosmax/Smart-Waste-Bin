@@ -146,13 +146,10 @@ def insert_pir_event(conn: sqlite3.Connection, record: dict) -> None:
     except Exception:
         et = datetime.now(timezone.utc)
 
-    dow  = et.weekday()    # 0=Mon … 6=Sun
+    dow  = et.weekday()
     hour = et.hour
-
-    raw_sensor_uri = record.get("device_id", "")
-    raw_bin_uri    = record.get("mounted_on", "")
-    sensor_id = raw_sensor_uri.split(":")[-1]
-    bin_id    = raw_bin_uri.split(":")[-1]
+    sensor_id = record.get("sensor_id") or record.get("device_id", "").split(":")[-1]
+    bin_id    = record.get("bin_id")    or record.get("mounted_on", "").split(":")[-1]
 
     conn.execute("""
         INSERT OR IGNORE INTO PIR_Events

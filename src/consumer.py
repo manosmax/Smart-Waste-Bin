@@ -176,9 +176,14 @@ def make_on_message(args: argparse.Namespace, db_conn, db_lock: threading.Lock):
             )
 
         if "/events" in msg.topic:
-            event_bin_id = record.get("bin_id") or topic_bin_id
+            parts = msg.topic.split("/")  # ["smartbin", "bin-02", "pir-02", "events"]
+            event_bin_id    = parts[1] if len(parts) > 1 else topic_bin_id
+            event_sensor_id = parts[2] if len(parts) > 2 else None
+
+            record["bin_id"]    = event_bin_id
+            record["sensor_id"] = event_sensor_id
+
             if event_bin_id and bin_exists(db_conn, db_lock, event_bin_id):
-                record["bin_id"] = event_bin_id
                 with db_lock:
                     insert_pir_event(db_conn, record)
             else:
