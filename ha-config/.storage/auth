@@ -22,7 +22,7 @@
         ],
         "is_owner": true,
         "is_active": true,
-        "name": "anastasis",
+        "name": "default",
         "system_generated": false,
         "local_only": false
       }
@@ -48,7 +48,7 @@
         "auth_provider_type": "homeassistant",
         "auth_provider_id": null,
         "data": {
-          "username": "anastasis"
+          "username": "default"
         }
       }
     ],
@@ -307,6 +307,40 @@
         "expire_at": 1787990292.372861,
         "credential_id": "348e0c91466942a79356bc4fe4162e15",
         "version": "2026.4.4"
+      },
+      {
+        "id": "31f40ffc793741e2afab1cb8ba4f2dab",
+        "user_id": "5d296a1f09e54cb784268818c68c20a2",
+        "client_id": "https://ha.smart-wastebin.com/",
+        "client_name": null,
+        "client_icon": null,
+        "token_type": "normal",
+        "created_at": "2026-06-01T16:04:39.829682+00:00",
+        "access_token_expiration": 1800.0,
+        "token": "e2fe2abfcf3ba5948554bcfb0279b8acab809aa8d4152c220b845e7ebea05b4a9bfd90d967cc0df2e449a2f49281b6222d8602c3ed2822adbce7a3c39ec59938",
+        "jwt_key": "5b4b00ef820a2c23c9e4426fb89d2d68a89bcf75391af71725810900c6f66c622162ce19c4630c289d4fb61bca75cfd0abab1259dd09754642f5eaa3230a3e28",
+        "last_used_at": "2026-06-01T16:04:39.829746+00:00",
+        "last_used_ip": "2a02:85f:e89b:3c01:7971:1b45:7aad:f894",
+        "expire_at": 1788105879.829746,
+        "credential_id": "348e0c91466942a79356bc4fe4162e15",
+        "version": "2026.5.4"
+      },
+      {
+        "id": "f368090affd143d2b53896cc04e70f0f",
+        "user_id": "5d296a1f09e54cb784268818c68c20a2",
+        "client_id": "https://ha.smart-wastebin.com/",
+        "client_name": null,
+        "client_icon": null,
+        "token_type": "normal",
+        "created_at": "2026-06-01T16:04:55.777894+00:00",
+        "access_token_expiration": 1800.0,
+        "token": "3e9153d7987384fa9639cd323ac63773a839eefcef6bc1a16a786deb04685edbcc5d9a03471bd2434e55c7c01143693cb03b5d80e0dea553fb4a02ee7a63d2aa",
+        "jwt_key": "08c1d32424ecbfbfc58c328195e976b7562163db786513786c3278922e53f21fc403d7caa2c7b0e1c0244b2a85d82deef20bba7fdc1a506895d2e54f03a43306",
+        "last_used_at": "2026-06-01T16:04:55.777973+00:00",
+        "last_used_ip": "2a02:85f:e89b:3c01:7971:1b45:7aad:f894",
+        "expire_at": 1788105895.777973,
+        "credential_id": "348e0c91466942a79356bc4fe4162e15",
+        "version": "2026.5.4"
       }
     ]
   }

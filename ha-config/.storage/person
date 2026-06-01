@@ -6,9 +6,10 @@
     "items": [
       {
         "id": "anastasis",
-        "name": "anastasis",
+        "name": "default",
         "user_id": "5d296a1f09e54cb784268818c68c20a2",
-        "device_trackers": []
+        "device_trackers": [],
+        "picture": null
       }
     ]
   }
