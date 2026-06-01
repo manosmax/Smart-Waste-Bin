@@ -39,15 +39,16 @@ HC-SR501 PIR sensor
        ▼
   producer.py ─────────────────────► Mosquitto MQTT broker :1883
        │                                        │
-  sensor_state.json                             ├──► consumer.py ──► motion_events.jsonl
-  (persists fill level across reboots)          │
-                                                ├──► virtual_sensor_rules.py  (CEP deque)
+  sensor_state.json                             ├──► consumer.py 
+  (persists fill level across reboots)          │     ├── motion_events.jsonl
+                                                |     └── SQLite writer ──► smartbin.db
+                                                ├──► virtual_sensor_rules.py  (CEP)
                                                 │
                                                 ├──► virtual_sensor_ml.py     (Random Forest)
                                                 │
                                                 ├──► Node-RED :1880
                                                 │         ├── alert flows
-                                                │         └── SQLite writer ──► smartbin.db
+                                                |         └── counter 
                                                 │
                                                 └──► api.py :5000 (Swagger UI)
                                                            ├── /bins/{id}/events
@@ -63,12 +64,10 @@ HC-SR501 PIR sensor
                                                                      │
                                                            Cloudflare Tunnel
                                                            ha / api / upload / asyncapi
-                                                           .yourdomain.com
+                                                           .smart-wastebin.com
 ```
 
-Data flows from the physical sensor through MQTT into both persistent storage (SQLite via
-Node-RED and the API) and real-time analytics (virtual sensors). The REST API serves all
-stored data with a Swagger UI and can also publish commands back to MQTT (e.g. mark a bin
+Data flows from the physical sensor through MQTT into both persistent storage (SQLite  and the API) and real-time analytics (virtual sensors). The REST API serves all stored data with a Swagger UI and can also publish commands back to MQTT (e.g. mark a bin
 as emptied). Home Assistant auto-discovers all entities via MQTT Discovery.
 
 ---
@@ -103,7 +102,7 @@ Mount the sensor on the **inner back wall** of the bin, lens facing the opening:
 ```
           ─ ─ ─ ─ ─ ─ ─ ─ ─ ─  ← bin lid
         |┌──────────────────┐|
-        |│  HC-SR501 dome   │| ← screwd to the back wall
+        |│  HC-SR501 dome   │| ← screwed to the back wall
         |└────────┬─────────┘|
         |         │          |
         │                    │
@@ -182,67 +181,55 @@ Once the stack is running, services are reachable at:
 ---
 
 ## 5. Directory Structure
-
 ```
 Smart-Waste-Bin/
-├── README.md
-├── requirements.txt
-├── asyncapi.yml                  ← AsyncAPI 3.0 MQTT interface spec
-├── Dockerfile
-├── docker-compose.yml
-├── mosquitto.conf                ← Mosquitto broker config
-├── train_model.py                ← ML training script (run at build time)
-├── virtual_sensor_ml.py          ← ML virtual sensor service
-├── virtual_sensor_rules.py       ← Rule-based virtual sensor service
 │
-├── src/                          ← Python application source
-│   ├── api.py                    ← Flask-RESTX REST API (Swagger UI)
-│   ├── consumer.py               ← MQTT subscriber + JSONL writer
-│   ├── producer.py               ← GPIO reader + MQTT publisher
-│   ├── upload.py                 ← CSV upload + Seaborn visualisation
-│   ├── serve_yaml.py             ← Static AsyncAPI YAML server
+├── docs/
+│   └── Ontology                        # OWL/RDF ontology definition
+│
+├── ha-config/                          # Home Assistant configuration files
+│
+├── models/                             # JSON-LD semantic models
+│   ├── context.jsonld                  # Shared @context for all models
+│   ├── environment.jsonld              # Deployment environment description
+│   ├── sensor.jsonld                   # PIR sensor instances
+│   └── wastebin.jsonld                 # Smart waste bin instances
+│
+├── models_v_s/
+│   └── busy_predictor.joblib           # Trained ML classifier (scikit-learn)
+│
+├── node-red/                           # Node-RED flow exports
+│
+├── src/
+│   ├── models_v_s/                     # ML training artifacts 
+│   ├── pirlib/                         # Shared PIR sensor helper library
 │   └── pirlib/
 │       ├── __init__.py
 │       ├── interpreter.py        ← Debounce + cooldown logic
 │       └── sampler.py            ← lgpio GPIO abstraction
+│   ├── api.py                          # Flask-RESTX REST API (read + publish)
+│   ├── consumer.py                     # MQTT consumer — DB ingest + JSONL writer
+│   ├── database.py                     # SQLite schema, queries, helpers
+│   ├── fictional_sensor.py             # Simulated sensor data generator
+│   ├── producer.py                     # MQTT message producer
+│   ├── serve_yaml.py                   # AsyncAPI spec HTTP server
+│   ├── train_model.py                  # ML model training pipeline
+│   ├── upload.py                       # File upload utility
+│   ├── virtual_sensor_ml.py            # ML-based virtual sensor
+│   └── virtual_sensor_rules.py        # Rule-based virtual sensor
 │
-├── models/                       ← JSON-LD semantic model files
-│   ├── context.jsonld
-│   ├── wastebin.jsonld           ← Bin identity + metadata
-│   ├── sensor.jsonld             ← Sensor identity + metadata
-│   └── environment.jsonld        ← Deployment environment context
-│
-├── models_v_s/                   ← Trained ML artefacts (generated at build)
-│   └── busy_predictor.joblib
-│
-├── node-red/                     ← Node-RED config (version-controlled)
-│   ├── flows.json                ← All flows — import/export via UI
-│   └── settings.js               ← Node-RED settings (port, logging)
-│
-├── db/
-│   └── schema.sql                ← Reference SQLite schema
-│
-├── docs/
-│   └── Ontology/                 ← Ontology documentation
-│
-├── asyncapi-docs/                ← Generated static HTML (gitignored)
-│
-│
-├── ha-config/
-│   ├── configuration.yaml      ← ha_configuration.yaml (rename on copy)
-│   └── packages/
-│       ├── smartbin_mqtt.yaml           ← ha_smartbin_mqtt.yaml
-│       └── smartbin_automations.yaml    ← ha_smartbin_automations.yaml
-│
-└── data/                         ← Runtime data (gitignored)
-    ├── motion_events.jsonl
-    ├── emptied_records.jsonl
-    ├── sensor_state.json         ← Persisted fill level (survives restarts)
-    ├── smartbin.db
-    └── uploads/
+├── .cloudflared.config.yml.example    # Cloudflare Tunnel config template
+├── .dockerignore
+├── .gitattributes
+├── .gitignore
+├── asyncapi.yml                        # AsyncAPI 2.x MQTT event specification
+├── docker-compose.yml                  # Multi-service Docker orchestration
+├── Dockerfile                          # Container image definition
+├── mosquitto.conf                      # MQTT broker configuration
+├── README.md
+├── REPORT.tex                          # LaTeX project report
+└── requirements.txt                    # Python dependencies
 ```
-
-
 ## 6. Services Reference
 
 | Service | Image | Port | Entry point | Key volumes |
@@ -308,7 +295,7 @@ The `bin_id` and `sensor_id` segments are configurable, enabling multi-bin deplo
 
 ## 8. REST API Endpoints
 
-Base URL: `http://localhost:5000` · Interactive Swagger UI: `http://localhost:5000/`
+Interactive Swagger UI: `http://localhost:5000/`
 
 ### `/bins` Namespace
 
@@ -349,10 +336,6 @@ Base URL: `http://localhost:5000` · Interactive Swagger UI: `http://localhost:5
 | Method | Path | Description |
 |---|---|---|
 | POST | `/mqtt/publish` | Publish arbitrary message to any topic |
-| POST | `/mqtt/subscribe` | Subscribe to an extra topic at runtime |
-| GET | `/mqtt/topics` | All topics seen since API start (last message each) |
-| GET | `/mqtt/topics/{topic}` | Last message on a specific topic |
-| DELETE | `/mqtt/topics/{topic}` | Remove topic from in-memory store |
 | GET | `/mqtt/messages?limit=100` | All stored MQTT messages from DB |
 | GET | `/mqtt/messages/{bin_id}` | Stored messages filtered by bin |
 
@@ -369,94 +352,23 @@ Base URL: `http://localhost:5000` · Interactive Swagger UI: `http://localhost:5
 
 ### Schema
 
-The database is initialised automatically by `api.py` on first start. The full schema
-is also available in `db/schema.sql`.
-
-```sql
--- One row per physical bin (expandable for multi-bin)
-CREATE TABLE IF NOT EXISTS Bins (
-    bin_id    TEXT PRIMARY KEY,          -- e.g. "bin-01"
-    bin_uri   TEXT UNIQUE,               -- URN e.g. "urn:wastebin:bin-01"
-    name      TEXT,
-    location  TEXT,
-    status    TEXT DEFAULT 'active',
-    created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-);
-
--- One row per PIR sensor
-CREATE TABLE IF NOT EXISTS Sensors (
-    sensor_id   TEXT PRIMARY KEY,        -- e.g. "pir-01"
-    sensor_uri  TEXT UNIQUE,
-    sensor_type TEXT DEFAULT 'PIR',
-    model       TEXT,
-    status      TEXT DEFAULT 'active',
-    created_at  TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-);
-
--- Which sensor lives in which bin (many-to-one)
-CREATE TABLE IF NOT EXISTS MountedOn (
-    sensor_id  TEXT REFERENCES Sensors(sensor_id) ON DELETE CASCADE,
-    bin_id     TEXT REFERENCES Bins(bin_id) ON DELETE CASCADE,
-    mounted_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-    PRIMARY KEY (sensor_id, bin_id)
-);
-
--- Every JSON-LD motion observation
-CREATE TABLE IF NOT EXISTS PIREvents (
-    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-    event_id            TEXT UNIQUE,
-    sensor_id           TEXT NOT NULL REFERENCES Sensors(sensor_id),
-    bin_id              TEXT NOT NULL REFERENCES Bins(bin_id),
-    event_time          TEXT NOT NULL,   -- ISO-8601 UTC (sosa:resultTime)
-    ingest_time         TEXT,
-    motion_state        TEXT DEFAULT 'detected',
-    event_type          TEXT,
-    seq                 INTEGER,
-    run_id              TEXT,
-    item_count          INTEGER,
-    fill_level          INTEGER,         -- 0–100 %
-    pipeline_latency_ms REAL
-);
-
--- Hourly usage counters — the heatmap source
-CREATE TABLE IF NOT EXISTS BinUsage (
-    bin_id      TEXT NOT NULL REFERENCES Bins(bin_id) ON DELETE CASCADE,
-    day_of_week INTEGER NOT NULL CHECK(day_of_week BETWEEN 0 AND 6),
-    hour        INTEGER NOT NULL CHECK(hour BETWEEN 0 AND 23),
-    usage_count INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (bin_id, day_of_week, hour)
-);
-
--- Raw MQTT payloads for post-crash debugging
-CREATE TABLE IF NOT EXISTS MQTTMessages (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    bin_id      TEXT REFERENCES Bins(bin_id),
-    topic       TEXT NOT NULL,
-    payload     TEXT NOT NULL,
-    qos         INTEGER DEFAULT 1,
-    retained    INTEGER DEFAULT 0,
-    received_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-);
-```
+The database is initialised automatically by `consumer.py` on first start and accessed on proceding program runs. 
 
 ### Database Backup
 
 ```bash
-docker cp smartbin-api-1:/app/data/smartbin.db ./backup_$(date +%Y%m%d).db
+database_path : /data/smartbin.db 
 ```
 
 ---
 
-Here is the corrected **Section 10** for your README, matching your actual Node-RED setup:
-
-***
 
 ## 10. Node-RED Flows
 
 Node-RED runs at `http://localhost:1880`. The dashboard UI is at `http://localhost:1880/ui`.
 All flows are version-controlled in `node-red/flows.json` and loaded automatically from the mounted volume.
 
-### Installation instructions 
+## Installation instructions 
 ### Install node-red-dashboard
 1. Open the Node-RED editor.
 2. Click the menu icon (top-right) and select **Manage palette**.
@@ -465,9 +377,9 @@ All flows are version-controlled in `node-red/flows.json` and loaded automatical
 5. Click **install**.
 
 ### Configure Mqtt 
-1. for every node, double click 
-2. on the server field -> pensil 
-3. replace the Server ip with the Pi5s ip 
+1. For every node, double click 
+2. On the server field -> pencil  
+3. Replace the Server ip with the Pi5's ip 
 
 ### What the Flows Do
 
@@ -478,19 +390,12 @@ All flows are version-controlled in `node-red/flows.json` and loaded automatical
 | **High-usage alert** | (internal, from function 1) | `highNotification` switch: fires when `level === "high"` → `POST_ALERT` function → HTTP POST to `api:5000/mqtt/publish` | `smartbin/bin-01/alerts` (retained) |
 | **Event log** | (internal, from function 1) | File node: appends one line per event | `/app/data/detected_events.log` |
 | **Dashboard gauge** | (internal, from function 1) | `ui_gauge`: displays event count 0–20, green/yellow/red segments | Dashboard at `/ui` |
-| **Dashboard level text** | (internal, from function 1) | `ui_text`: displays current usage level string | Dashboard at `/ui` |
-| **Heartbeat** | inject (every 60 s) | `function 2`: builds keepalive payload | `smartbin/bin-01/nodered/heartbeat` |
 
 ### Dashboard
 
-The Node-RED Dashboard (served at `http://localhost:1880/ui`) provides two live widgets for `bin-01`:
+The Node-RED Dashboard (served at `http://localhost:1880/ui`) provides one live widget for `bin-01`:
 
-- **Bin usage** — gauge showing events in the last 10 minutes (green 0–3, yellow 4–10, red 11+)
-- **level** — text display of the current classification (`idle` / `low` / `medium` / `high`)
-
-### Required Node-RED Nodes
-
-`node-red-dashboard` is installed **automatically** on container start via the `NODE_RED_INSTALL_EXTRA_PACKAGES` environment variable set in `docker-compose.yml` — no manual steps needed for new users.
+- **Bin usage** — gauge showing events in the last 10 minutes.
 
 ---
 
@@ -719,14 +624,6 @@ systemctl status cloudflared        # confirm "active (running)"
 
 The tunnel reconnects automatically on Pi reboots.
 
-### What to Commit vs. What NOT to Commit
-
-| File | Commit? | Reason |
-|---|---|---|
-| `.cloudflared/config.yml.example` | ✅ Yes | Template with placeholders — safe |
-| `.cloudflared/config.yml` | ❌ No | Contains tunnel UUID — gitignored |
-| `.cloudflared/<UUID>.json` | ❌ No | Tunnel credentials — gitignored |
-
 ---
 
 ## 15. Configuration Reference
@@ -745,7 +642,7 @@ All parameters and their defaults. Values can be overridden via CLI flags inside
 | Bin capacity (events = 100%) | `50` | `BIN_CAPACITY` constant in `producer.py` | producer |
 | Sample interval (s) | `0.1` (10 Hz) | `--sample-interval` | producer |
 | Cooldown between events (s) | `5.0` | `--cooldown` | producer |
-| Minimum HIGH duration (s) | `0.2` | `--min-high` | producer |
+| Minimum HIGH duration (s) | `0.5` | `--min-high` | producer |
 | Event queue max size | `100` | `--queue-size` | producer |
 | Producer run duration (s) | `7200` (2 h) | `--duration` | producer |
 | MQTT topic (events) | `smartbin/bin-01/pir-01/events` | `--topic` | producer |
@@ -762,9 +659,6 @@ All parameters and their defaults. Values can be overridden via CLI flags inside
 | Database path | `smartbin.db` | `DBPATH` env var | api, database |
 
 ---
-Here is the updated **Section 16** based on the actual `database.py` code:
-
-***
 
 ## 16. Extending the System (Multi-Bin)
 
@@ -796,8 +690,6 @@ producer-bin-02:
   depends_on:
     - mosquitto
 ```
-
-> If you are on a Raspberry Pi 5, uncomment `/dev/gpiochip4` instead of `gpiochip0` — the chip changed between generations.
 
 **2. Add JSON-LD model files** for the new bin and sensor:
 
@@ -991,14 +883,6 @@ A standalone context document referenced by all other files so namespace declara
 
 
 
-
-### Node-RED `sqlite` Node Missing
-
-```bash
-docker exec -it smartbin-node-red-1 \
-  npm install --prefix /usr/src/node-red node-red-node-sqlite
-docker compose restart node-red
-```
 
 ### Cloudflare Tunnel Shows "Offline"
 
