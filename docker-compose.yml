@@ -90,7 +90,7 @@ services:
       - smartbin-net
     depends_on:
       mosquitto:
-        condition: service_healthy
+        condition: service_started
       producer:
         condition: service_started
       train_model:
