@@ -89,9 +89,13 @@ services:
     networks:
       - smartbin-net
     depends_on:
-      - mosquitto
-      - producer
-
+      mosquitto:
+        condition: service_healthy
+      producer:
+        condition: service_started
+      train_model:
+        condition: service_completed_successfully
+        
   fictional-sensor:
     build: .
     command: python fictional_sensor.py --bin-id bin-02 --sensor-id pir-02 --host mosquitto
