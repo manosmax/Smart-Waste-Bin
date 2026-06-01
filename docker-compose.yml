@@ -23,7 +23,7 @@ services:
       - mosquitto
     restart: unless-stopped
 
-consumer:
+  consumer:
     build: .
     command: >
       python consumer.py
