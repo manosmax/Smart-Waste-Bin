@@ -486,9 +486,10 @@ dashboard for the 2 sensors.
 
 #### Configuration 
 At this moment all sensors will be uknown as you haven't connected to the MQTT broker yet. 
-1. Open Home Assistant → **Settings → Devices & Services → MQTT -> three dots -> reconfigure**
-2. Set Broker to `<Raspberry Pi IP address>` and Port to `1883`
-3. Click **Submit** — no username/password needed for the default config
+1. Open Home Assistant → **Settings → Devices & Services -> add integration -> MQTT
+2. MQTT -> three dots -> reconfigure 
+3. Set Broker to `<Raspberry Pi IP address>` and Port to `1883`
+4. Click **Submit** — no username/password needed for the default config
 
 All sensor entities should appear **automatically within ~30 seconds** via MQTT Discovery. If a sensor has been triggered but does not appear on your dashboard, the Entity ID in Home Assistant likely mismatched your dashboard configuration.
 
